@@ -90,10 +90,10 @@ import com.dessalines.thumbkey.db.DEFAULT_THEME_COLOR
 import com.dessalines.thumbkey.db.DEFAULT_USE_PRIVATE_CLIPBOARD
 import com.dessalines.thumbkey.db.DEFAULT_VIBRATE_ON_SLIDE
 import com.dessalines.thumbkey.db.DEFAULT_VIBRATE_ON_TAP
+import com.dessalines.thumbkey.db.DatabaseBackupHelper
 import com.dessalines.thumbkey.utils.SimpleTopAppBar
 import com.dessalines.thumbkey.utils.keyboardLayoutsSetFromDbIndexString
 import com.dessalines.thumbkey.utils.updateLayouts
-import com.roomdbexportimport.RoomDBExportImport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -115,8 +115,6 @@ fun BackupAndRestoreScreen(
 
     var showConfirmResetDialog by remember { mutableStateOf(false) }
 
-    val dbHelper = RoomDBExportImport(AppDB.getDatabase(ctx).openHelper)
-
     val backedUpMsg = stringResource(R.string.database_backed_up)
     val operationFailedTemplate = stringResource(R.string.database_operation_failed)
 
@@ -125,20 +123,18 @@ fun BackupAndRestoreScreen(
             ActivityResultContracts.CreateDocument("application/zip"),
         ) {
             it?.also { uri ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { dbHelper.export(ctx, uri) }
-                            .onSuccess {
-                                Toast.makeText(ctx, backedUpMsg, Toast.LENGTH_SHORT).show()
-                            }.onFailure {
-                                Toast
-                                    .makeText(
-                                        ctx,
-                                        operationFailedTemplate.format(it.message ?: it.stackTraceToString()),
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                            }
-                    }
+                scope.launch {
+                    withContext(Dispatchers.IO) { DatabaseBackupHelper.export(ctx, AppDB.getDatabase(ctx), uri) }
+                        .onSuccess {
+                            Toast.makeText(ctx, backedUpMsg, Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            Toast
+                                .makeText(
+                                    ctx,
+                                    operationFailedTemplate.format(it.message ?: it.stackTraceToString()),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                        }
                 }
             }
         }
@@ -148,18 +144,16 @@ fun BackupAndRestoreScreen(
             ActivityResultContracts.OpenDocument(),
         ) {
             it?.also { uri ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { dbHelper.import(ctx, uri, true) }
-                            .onFailure {
-                                Toast
-                                    .makeText(
-                                        ctx,
-                                        operationFailedTemplate.format(it.message ?: it.stackTraceToString()),
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                            }
-                    }
+                scope.launch {
+                    withContext(Dispatchers.IO) { DatabaseBackupHelper.import(ctx, AppDB.getDatabase(ctx), uri) }
+                        .onFailure {
+                            Toast
+                                .makeText(
+                                    ctx,
+                                    operationFailedTemplate.format(it.message ?: it.stackTraceToString()),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                        }
                 }
             }
         }
