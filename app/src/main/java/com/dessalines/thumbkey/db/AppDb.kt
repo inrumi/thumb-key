@@ -791,6 +791,13 @@ abstract class AppDB : RoomDatabase() {
                 i
             }
         }
+
+        fun closeAndClearInstance() {
+            synchronized(this) {
+                instance?.close()
+                instance = null
+            }
+        }
     }
 }
 
