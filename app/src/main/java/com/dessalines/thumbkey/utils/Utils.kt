@@ -1761,27 +1761,38 @@ fun autoCapitalizeCheck(ime: IMEService): Boolean = ime.currentInputConnection.g
 /**
  * Avoid capitalizing or switching to shifted mode in certain edit boxes
  */
-fun isUriOrEmailOrPasswordField(ime: IMEService): Boolean {
-    val inputType = ime.currentInputEditorInfo.inputType and (InputType.TYPE_MASK_VARIATION)
-    return listOf(
-        InputType.TYPE_TEXT_VARIATION_URI,
-        InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
-        InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
-        InputType.TYPE_TEXT_VARIATION_PASSWORD,
-        InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
-        InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
-        InputType.TYPE_NUMBER_VARIATION_PASSWORD,
-    ).contains(inputType) ||
-        ime.currentInputEditorInfo.inputType == EditorInfo.TYPE_NULL
+fun isUriOrEmailOrPasswordField(ime: IMEService): Boolean = isUriOrEmailOrPasswordInputType(ime.currentInputEditorInfo?.inputType ?: 0)
+
+fun isPasswordField(ime: IMEService): Boolean = isPasswordInputType(ime.currentInputEditorInfo?.inputType ?: 0)
+
+// Mask TYPE_MASK_CLASS before checking variations: TYPE_TEXT_VARIATION_URI and
+// TYPE_NUMBER_VARIATION_PASSWORD share bit pattern 0x0010.
+internal fun isPasswordInputType(inputType: Int): Boolean {
+    val variation = inputType and InputType.TYPE_MASK_VARIATION
+    return when (inputType and InputType.TYPE_MASK_CLASS) {
+        InputType.TYPE_CLASS_TEXT -> {
+            variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+
+        InputType.TYPE_CLASS_NUMBER -> {
+            variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
+
+        else -> {
+            false
+        }
+    }
 }
 
-fun isPasswordField(ime: IMEService): Boolean {
-    val inputType = ime.currentInputEditorInfo.inputType and (InputType.TYPE_MASK_VARIATION)
-    return listOf(
-        InputType.TYPE_TEXT_VARIATION_PASSWORD,
-        InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
-        InputType.TYPE_NUMBER_VARIATION_PASSWORD,
-    ).contains(inputType)
+internal fun isUriOrEmailOrPasswordInputType(inputType: Int): Boolean {
+    if (inputType == EditorInfo.TYPE_NULL || isPasswordInputType(inputType)) return true
+    if ((inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) return false
+    val variation = inputType and InputType.TYPE_MASK_VARIATION
+    return variation == InputType.TYPE_TEXT_VARIATION_URI ||
+        variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+        variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
 }
 
 fun deleteWordBeforeCursor(ime: IMEService) {

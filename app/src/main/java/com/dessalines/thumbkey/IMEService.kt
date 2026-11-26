@@ -15,6 +15,9 @@ import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.LinearLayout
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntRect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -75,6 +78,9 @@ class IMEService :
     }
 
     var currentKeyboardDefinition: KeyboardDefinition? = null
+
+    var editorInputType by mutableIntStateOf(0)
+        private set
 
     // While set, the keys type into this field of the keyboard's own, like sketch mode's
     // search, instead of the app's
@@ -179,6 +185,7 @@ class IMEService :
         restarting: Boolean,
     ) {
         super.onStartInput(attribute, restarting)
+        editorInputType = attribute?.inputType ?: 0
         setInputRedirect(null)
         // A new keyboard opens on the letters: close sketch mode's search and lists, but keep
         // its drawing
