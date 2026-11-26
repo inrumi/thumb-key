@@ -8,8 +8,10 @@ import android.content.res.Resources
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.util.Log
+import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -1809,6 +1811,43 @@ fun moveCursor(
     val selection = startSelection(ime)
     selection.right(delta)
     ime.currentInputConnection.setSelection(selection.end, selection.end)
+}
+
+internal fun isSingleLineEditor(
+    inputType: Int,
+    imeOptions: Int,
+): Boolean {
+    if ((inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0) return false
+    if ((imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0) return false
+    val action = imeOptions and EditorInfo.IME_MASK_ACTION
+    return action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED
+}
+
+internal fun verticalSlideStepDp(slideSensitivity: Int): Float = (38f - slideSensitivity.coerceIn(1, 50) * 0.45f).coerceIn(16f, 40f)
+
+internal fun isVerticalSlideDominant(
+    dx: Float,
+    dy: Float,
+): Boolean = abs(dy) >= abs(dx) * 0.85f
+
+fun moveCursorVertically(
+    ime: IMEService,
+    direction: Int,
+) {
+    val ic = ime.currentInputConnection
+    val ei = ime.currentInputEditorInfo
+    if (ei != null && isSingleLineEditor(ei.inputType, ei.imeOptions)) {
+        val sample = if (direction < 0) ic.getTextBeforeCursor(256, 0) else ic.getTextAfterCursor(256, 0)
+        if (sample == null || sample.none { it == '\n' || it == '\r' || it == '\u2028' }) {
+            if (direction < 0) cursorToTextStart(ime) else cursorToTextEnd(ime)
+            return
+        }
+    }
+    val keyCode = if (direction < 0) KeyEvent.KEYCODE_DPAD_UP else KeyEvent.KEYCODE_DPAD_DOWN
+    val now = SystemClock.uptimeMillis()
+    val flags = KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
+    ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags))
+    ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags))
 }
 
 fun sendCursorKeyEvent(

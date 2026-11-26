@@ -21,6 +21,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
@@ -33,7 +34,9 @@ import com.dessalines.thumbkey.db.DEFAULT_POSITION
 import com.dessalines.thumbkey.db.DEFAULT_SHOW_ON_SCREEN_KEYBOARD
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_IME_MODE
 import com.dessalines.thumbkey.db.DEFAULT_USE_PRIVATE_CLIPBOARD
+import com.dessalines.thumbkey.ui.components.keyboard.CaretMagnifierController
 import com.dessalines.thumbkey.ui.components.keyboard.SketchState
+import com.dessalines.thumbkey.ui.components.keyboard.hidesTypedText
 import com.dessalines.thumbkey.utils.ImeSwitchMode
 import com.dessalines.thumbkey.utils.KeyboardDefinition
 import com.dessalines.thumbkey.utils.KeyboardLayout
@@ -94,6 +97,31 @@ class IMEService :
 
     // Sketch mode's drawing, kept while the keyboard is closed and opened again
     val sketchState = SketchState()
+    val caretMagnifier: CaretMagnifierController by lazy { CaretMagnifierController(lifecycleScope) }
+    private var lastReportedSelStart: Int = -1
+    private var lastReportedSelEnd: Int = -1
+    private var currentInputType: Int = EditorInfo.TYPE_NULL
+
+    fun onSpacebarSlideChanged(active: Boolean) {
+        if (active) {
+            val ic: InputConnection? = runCatching { currentInputConnection }.getOrNull()
+            if (ic != null) {
+                caretMagnifier.begin(
+                    ic = ic,
+                    selStart = lastReportedSelStart,
+                    selEnd = lastReportedSelEnd,
+                    mask = hidesTypedText(currentInputType),
+                )
+            }
+        } else {
+            caretMagnifier.stop()
+        }
+    }
+
+    fun onSpacebarSlideStep() {
+        caretMagnifier.onStep()
+    }
+
     private var clipboardManager: ThumbKeyClipboardManager? = null
     private var isFloatingMode: Boolean = false
     private var floatingPanelBounds: Rect? = null
@@ -179,6 +207,10 @@ class IMEService :
         restarting: Boolean,
     ) {
         super.onStartInput(attribute, restarting)
+        currentInputType = attribute?.inputType ?: EditorInfo.TYPE_NULL
+        lastReportedSelStart = -1
+        lastReportedSelEnd = -1
+        caretMagnifier.stop()
         setInputRedirect(null)
         // A new keyboard opens on the letters: close sketch mode's search and lists, but keep
         // its drawing
@@ -285,16 +317,44 @@ class IMEService :
         }
     }
 
+    override fun onFinishInput() {
+        caretMagnifier.stop()
+        super.onFinishInput()
+    }
+
     override fun onDestroy() {
+        caretMagnifier.stop()
         clipboardManager?.stopListening()
         clipboardManager = null
         super.onDestroy()
         handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
 
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(
+            oldSelStart,
+            oldSelEnd,
+            newSelStart,
+            newSelEnd,
+            candidatesStart,
+            candidatesEnd,
+        )
+        lastReportedSelStart = newSelStart
+        lastReportedSelEnd = newSelEnd
+        caretMagnifier.onSelection(newSelStart, newSelEnd)
+    }
+
     // Cursor update Methods
     override fun onUpdateCursorAnchorInfo(cursorAnchorInfo: CursorAnchorInfo) {
         super.onUpdateCursorAnchorInfo(cursorAnchorInfo)
+        caretMagnifier.onCursorAnchor(cursorAnchorInfo)
 
         cursorMoved =
             if (ignoreCursorMove) {
@@ -352,6 +412,7 @@ class IMEService :
     override fun onFinishInputView(finishingInput: Boolean) {
         // Must run before super, which commits any composing text as it stands.
         // Running after it would let the processor write its pending text a second time.
+        caretMagnifier.stop()
         currentKeyboardDefinition?.settings?.textProcessor?.handleFinishInput(this)
         super.onFinishInputView(finishingInput)
     }

@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -73,6 +74,8 @@ import com.dessalines.thumbkey.utils.deleteWordBeforeCursor
 import com.dessalines.thumbkey.utils.doneKeyAction
 import com.dessalines.thumbkey.utils.fontSizeVariantToFontSize
 import com.dessalines.thumbkey.utils.isPasswordField
+import com.dessalines.thumbkey.utils.isVerticalSlideDominant
+import com.dessalines.thumbkey.utils.moveCursorVertically
 import com.dessalines.thumbkey.utils.nextWordAfterCursor
 import com.dessalines.thumbkey.utils.performKeyAction
 import com.dessalines.thumbkey.utils.previousWordBeforeCursor
@@ -81,13 +84,12 @@ import com.dessalines.thumbkey.utils.slideCursorDistance
 import com.dessalines.thumbkey.utils.startSelection
 import com.dessalines.thumbkey.utils.swipeDirection
 import com.dessalines.thumbkey.utils.toPx
+import com.dessalines.thumbkey.utils.verticalSlideStepDp
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -187,7 +189,9 @@ fun KeyboardKey(
 
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var verticalAccumY by remember { mutableFloatStateOf(0f) }
     var hasSlideMoveCursorTriggered by remember { mutableStateOf(false) }
+    var spacebarMagnifierActive by remember { mutableStateOf(false) }
     var timeOfLastAccelerationInput by remember { mutableLongStateOf(0L) }
     var positions by remember { mutableStateOf(listOf<Offset>()) }
     var maxOffset by remember { mutableStateOf(Offset(0f, 0f)) }
@@ -199,6 +203,19 @@ fun KeyboardKey(
     var slideHoldReturnDetected by remember { mutableStateOf(false) }
     var slideHoldTickCount by remember { mutableIntStateOf(0) }
     var slideHoldRepeatJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    fun setSpacebarMagnifier(active: Boolean) {
+        if (spacebarMagnifierActive == active) return
+        spacebarMagnifierActive = active
+        ime.onSpacebarSlideChanged(active)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            slideHoldRepeatJob?.cancel()
+            setSpacebarMagnifier(false)
+        }
+    }
 
     val backgroundColor =
         if (!(isDragged.value || isPressed)) {
@@ -247,29 +264,40 @@ fun KeyboardKey(
                     SLIDE_HOLD_FAST_TICK_DELAY_MS
                 }
             delay(delayMs)
-            val keyCode =
-                when (dir) {
-                    SwipeDirection.LEFT -> {
-                        KeyEvent.KEYCODE_DPAD_LEFT
-                    }
-
-                    SwipeDirection.RIGHT -> {
-                        KeyEvent.KEYCODE_DPAD_RIGHT
-                    }
-
-                    else -> {
-                        // This should never happen)
-                        Log.d(TAG, "ERROR: Invalid swipe direction: $dir")
+            when (dir) {
+                SwipeDirection.LEFT -> {
+                    if (slideHoldReturnDetected) {
+                        previousWordBeforeCursor(ime)
+                    } else {
+                        ime.currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT))
+                        ime.currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT))
                     }
                 }
-            if (slideHoldReturnDetected) {
-                if (dir == SwipeDirection.RIGHT) nextWordAfterCursor(ime) else previousWordBeforeCursor(ime)
-            } else {
-                ime.currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-                ime.currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+
+                SwipeDirection.RIGHT -> {
+                    if (slideHoldReturnDetected) {
+                        nextWordAfterCursor(ime)
+                    } else {
+                        ime.currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT))
+                        ime.currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_RIGHT))
+                    }
+                }
+
+                SwipeDirection.TOP -> {
+                    moveCursorVertically(ime, -1)
+                }
+
+                SwipeDirection.BOTTOM -> {
+                    moveCursorVertically(ime, 1)
+                }
+
+                else -> {
+                    Log.d(TAG, "ERROR: Invalid swipe direction: $dir")
+                }
             }
             tickCount++
             slideHoldTickCount = tickCount
+            ime.onSpacebarSlideStep()
             if (vibrateOnSlide) view.performHapticFeedback(slideHapticConstant)
         }
     }
@@ -361,8 +389,13 @@ fun KeyboardKey(
             slideHoldDirection = dir
             when (key.slideType) {
                 SlideType.MOVE_CURSOR -> {
-                    if (dir == SwipeDirection.LEFT || dir == SwipeDirection.RIGHT) {
-                        // Launch repeating cursor movement coroutine
+                    if (
+                        dir == SwipeDirection.LEFT ||
+                        dir == SwipeDirection.RIGHT ||
+                        dir == SwipeDirection.TOP ||
+                        dir == SwipeDirection.BOTTOM
+                    ) {
+                        setSpacebarMagnifier(true)
                         slideHoldRepeatJob = scope.launch { repeatCursorMovement(dir) }
                     }
                 }
@@ -461,6 +494,7 @@ fun KeyboardKey(
                 detectDragGestures(
                     onDragStart = {
                         isDragged.value = true
+                        verticalAccumY = 0f
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
@@ -474,90 +508,65 @@ fun KeyboardKey(
                         // First detection is large enough to preserve swipe actions.
                         val slideOffsetTrigger = (keySize.dp.toPx() * 0.75) + minSwipeLength
 
-                        // These keys have a lot of functionality.
-                        // We can tap; swipe; slide the cursor left/right; select and delete text
-                        // Spacebar:
-                        //      Swipe up/down/left/right
-                        //      Slide gesture
-                        //          With slide gesture deadzone to allow normal swipes
-                        //          Without deadzone
-                        //      Slide up to enter selection mode.
-                        // Backspace key:
-                        //      Swipe left and right to delete whole word
-                        //      Slide gesture delete
-                        //          Wtih slide gesture deadzone to allow normal swipes
-                        //          Without deadzone
                         if ((key.slideType == SlideType.MOVE_CURSOR || key.slideType == SlideType.DELETE) && slideHoldEnabled) {
                             handleSlideHold()
                         } else if (key.slideType == SlideType.MOVE_CURSOR && slideEnabled) {
-                            val slideSelectionOffsetTrigger = (keySize.dp.toPx() * 1.25) + minSwipeLength
-                            if (abs(offsetY) > slideSelectionOffsetTrigger) {
-                                // If user slides upwards, enable selection
-                                hasSlideMoveCursorTriggered = true
-                                if (!selection.active) {
-                                    // Activate selection
-                                    selection = startSelection(ime)
-                                }
-
-                                val cursorMovement =
-                                    slideCursorDistance(offsetX, timeOfLastAccelerationInput, slideCursorMovementMode, slideSensitivity)
-                                timeOfLastAccelerationInput = System.currentTimeMillis()
-                                if (cursorMovement >= 1 || cursorMovement <= -1) {
-                                    if (cursorMovement < 0.00) {
-                                        selection.left(abs(cursorMovement))
-                                    } else {
-                                        selection.right(abs(cursorMovement))
-                                    }
-                                    ime.currentInputConnection.setSelection(
-                                        selection.start,
-                                        selection.end,
-                                    )
-                                    // reset offsetX, do not reset offsetY when sliding, it will break selecting
+                            val crossedDeadzone =
+                                !slideSpacebarDeadzoneEnabled ||
+                                    abs(offsetX) > slideOffsetTrigger ||
+                                    abs(offsetY) > slideOffsetTrigger
+                            if (hasSlideMoveCursorTriggered || crossedDeadzone) {
+                                val justEntered = !hasSlideMoveCursorTriggered
+                                if (justEntered) {
+                                    val initialDx = offsetX
+                                    val initialDy = offsetY
                                     offsetX = 0f
-                                    // selection has changed; give feedback
-                                    if (vibrateOnSlide) view.performHapticFeedback(slideHapticConstant)
-                                }
-                            } else if ((
-                                    slideSpacebarDeadzoneEnabled &&
-                                        (abs(offsetX) > slideOffsetTrigger) &&
-                                        // if we've gone past the deadzone
-                                        (!hasSlideMoveCursorTriggered)
-                                ) ||
-                                // OR we don't use the deadzone
-                                ((!hasSlideMoveCursorTriggered) && (!slideSpacebarDeadzoneEnabled)) ||
-                                // OR we have already started slide gesture mode.
-                                hasSlideMoveCursorTriggered
-                            ) {
-                                // If user slides horizontally only, move cursor
-
-                                // The first time we enter this, reset offsetX, because of the slideOffsetTrigger
-                                if (!hasSlideMoveCursorTriggered) {
-                                    // reset offsetX, do not reset offsetY when sliding, it will break selecting
-                                    offsetX = 0f
+                                    offsetY = 0f
+                                    verticalAccumY = 0f
                                     hasSlideMoveCursorTriggered = true
+                                    setSpacebarMagnifier(true)
+                                    if (
+                                        slideSpacebarDeadzoneEnabled &&
+                                        abs(initialDy) > slideOffsetTrigger &&
+                                        isVerticalSlideDominant(initialDx, initialDy)
+                                    ) {
+                                        moveCursorVertically(ime, if (initialDy < 0f) -1 else 1)
+                                        ime.onSpacebarSlideStep()
+                                        if (vibrateOnSlide) view.performHapticFeedback(slideHapticConstant)
+                                    }
+                                }
+
+                                if (!justEntered) {
+                                    if (isVerticalSlideDominant(x, y)) {
+                                        verticalAccumY += y
+                                        if (abs(y) > abs(x) * 1.6f) {
+                                            offsetX *= 0.5f
+                                        }
+                                    } else {
+                                        verticalAccumY *= 0.5f
+                                    }
+                                    val verticalStepPx = verticalSlideStepDp(slideSensitivity).dp.toPx()
+                                    var verticalSteps = 0
+                                    while (verticalAccumY >= verticalStepPx && verticalSteps < 4) {
+                                        moveCursorVertically(ime, 1)
+                                        verticalAccumY -= verticalStepPx
+                                        verticalSteps++
+                                    }
+                                    while (verticalAccumY <= -verticalStepPx && verticalSteps < 4) {
+                                        moveCursorVertically(ime, -1)
+                                        verticalAccumY += verticalStepPx
+                                        verticalSteps++
+                                    }
+                                    if (verticalSteps > 0) {
+                                        ime.onSpacebarSlideStep()
+                                        if (vibrateOnSlide) view.performHapticFeedback(slideHapticConstant)
+                                    }
                                 }
 
                                 var lengthOfSelectedText = 0
-                                if (selection.active) {
-                                    // Move the cursor to the beginning or end of the selection and exit selection.
-                                    val location =
-                                        if (offsetX < 0) {
-                                            min(selection.start, selection.end)
-                                        } else {
-                                            max(selection.start, selection.end)
-                                        }
-
-                                    selection = Selection(location, location, false)
-                                    ime.currentInputConnection.setSelection(
-                                        selection.start,
-                                        selection.end,
-                                    )
-                                } else {
-                                    // Check if any text has been selected, but the selection wasn't done by this keyboard.
-                                    val selectedText = ime.currentInputConnection.getSelectedText(0)
-                                    if ((!selectedText.isNullOrEmpty()) && selectedText.isNotEmpty()) {
-                                        lengthOfSelectedText = selectedText.length
-                                    }
+                                val selectedText = ime.currentInputConnection.getSelectedText(0)
+                                if (!selectedText.isNullOrEmpty()) {
+                                    lengthOfSelectedText = selectedText.length
                                 }
 
                                 var cursorMovement =
@@ -568,29 +577,20 @@ fun KeyboardKey(
                                     cursorMovement += 1
                                 }
 
-                                // Move the cursor
-                                // For some reason, '2' moves the cursor to the right by 1 character.
-                                //                 '-1' moves the cursor to the left  by 1 character.
+                                // Move the cursor horizontally.
+                                // '2' moves the cursor right by 1 character; '-1' moves it left by 1 character.
                                 if (cursorMovement >= 2 || cursorMovement <= -1) {
                                     if (lengthOfSelectedText > 0) {
-                                        // Deselect text that has been selected, but the selection wasn't done by this keyboard.
                                         selection = startSelection(ime)
-                                        ime.currentInputConnection.setSelection(
-                                            selection.start,
-                                            selection.end,
-                                        )
-                                        // Reset the selection
+                                        ime.currentInputConnection.setSelection(selection.start, selection.end)
                                         selection = Selection()
-
-                                        // Move the cursor to the end of the selection if we swipe right.
                                         if (cursorMovement >= 2) {
                                             cursorMovement += lengthOfSelectedText
                                         }
                                     }
                                     ime.currentInputConnection.commitText("", cursorMovement)
-                                    // reset offsetX, do not reset offsetY when sliding, it will break selecting
+                                    ime.onSpacebarSlideStep()
                                     offsetX = 0f
-                                    // selection has changed; give feedback
                                     if (vibrateOnSlide) view.performHapticFeedback(slideHapticConstant)
                                 }
                             }
@@ -634,6 +634,7 @@ fun KeyboardKey(
                         lateinit var action: KeyAction
 
                         val slideHoldTicks = resetSlideHoldVariables()
+                        setSpacebarMagnifier(false)
 
                         if ((key.slideType == SlideType.MOVE_CURSOR || key.slideType == SlideType.DELETE) &&
                             slideHoldEnabled && slideHoldTicks > 0
@@ -815,10 +816,23 @@ fun KeyboardKey(
                         // Reset the drags
                         offsetX = 0f
                         offsetY = 0f
+                        verticalAccumY = 0f
                         maxOffset = Offset(0f, 0f)
                         positions = listOf()
 
                         // Reset selection
+                        selection = Selection()
+                    },
+                    onDragCancel = {
+                        resetSlideHoldVariables()
+                        setSpacebarMagnifier(false)
+                        hasSlideMoveCursorTriggered = false
+                        isDragged.value = false
+                        offsetX = 0f
+                        offsetY = 0f
+                        verticalAccumY = 0f
+                        maxOffset = Offset(0f, 0f)
+                        positions = listOf()
                         selection = Selection()
                     },
                 )

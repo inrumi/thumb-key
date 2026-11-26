@@ -1266,6 +1266,10 @@ fun KeyboardScreen(
                         modifier = Modifier.matchParentSize(),
                     )
                 }
+                CaretMagnifierHost(
+                    state = ctx.caretMagnifier.state,
+                    isFloating = true,
+                )
             },
         ) { floatingKeyWidth, floatingKeyHeight ->
             renderKeyboardContent(floatingKeyWidth, floatingKeyHeight, true)
@@ -1295,6 +1299,10 @@ fun KeyboardScreen(
                     modifier = Modifier.matchParentSize(),
                 )
             }
+            CaretMagnifierHost(
+                state = ctx.caretMagnifier.state,
+                isFloating = false,
+            )
         }
     }
 }
