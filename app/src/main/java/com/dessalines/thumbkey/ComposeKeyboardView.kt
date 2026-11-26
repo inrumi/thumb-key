@@ -14,11 +14,14 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.dessalines.thumbkey.autocorrect.LayoutLanguageResolver
 import com.dessalines.thumbkey.db.AppSettingsRepository
+import com.dessalines.thumbkey.db.AutocorrectActiveLanguageUpdate
 import com.dessalines.thumbkey.db.ClipboardRepository
 import com.dessalines.thumbkey.db.FloatingPositionUpdate
 import com.dessalines.thumbkey.ui.components.keyboard.KeyboardScreen
 import com.dessalines.thumbkey.ui.theme.ThumbkeyTheme
+import com.dessalines.thumbkey.utils.KeyboardLayout
 import com.dessalines.thumbkey.utils.KeyboardPosition
 import com.dessalines.thumbkey.utils.keyboardLayoutsSetFromDbIndexString
 import com.dessalines.thumbkey.utils.resolveKeyboardDefinition
@@ -77,6 +80,12 @@ class ComposeKeyboardView(
                                         ?.settings
                                         ?.textProcessor
                                         ?.updateCursorPosition(ctx)
+                                    ctx.autocorrectSession?.refreshSuggestions(
+                                        ime = ctx,
+                                        layout = layout,
+                                        keyboardDef = ctx.currentKeyboardDefinition ?: layout.keyboardDefinition,
+                                        settings = s2,
+                                    )
 
                                     // Display the new layout's name on the screen
                                     if (s.showToastOnLayoutSwitch.toBool()) {
@@ -86,6 +95,43 @@ class ComposeKeyboardView(
                                             .show()
                                     }
                                 }
+                            }
+                        }
+                    },
+                    onCycleAutocorrectLanguage = {
+                        ctx.lifecycleScope.launch {
+                            val s = settingsState.value ?: return@launch
+                            val layout = KeyboardLayout.entries.getOrElse(s.keyboardLayout) { KeyboardLayout.ENThumbKey }
+                            val cycle = LayoutLanguageResolver.enabledLanguageCycle(layout, s.autocorrectAdditionalLanguages)
+                            if (cycle.isEmpty()) return@launch
+                            val current =
+                                LayoutLanguageResolver.resolveActiveLanguage(
+                                    layout,
+                                    s.autocorrectAdditionalLanguages,
+                                    s.autocorrectActiveLanguage,
+                                )
+                            if (cycle.size <= 1) {
+                                val label = LayoutLanguageResolver.displayNameForSpacebar(cycle[0])
+                                Toast
+                                    .makeText(
+                                        context,
+                                        context.getString(R.string.autocorrect_language_switched_single, label),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                return@launch
+                            }
+                            val next = LayoutLanguageResolver.nextActiveLanguage(cycle, current) ?: return@launch
+                            settingsRepo.updateAutocorrectActiveLanguage(AutocorrectActiveLanguageUpdate(s.id, next))
+                            ctx.autocorrectSession?.onActiveLanguageChanged(
+                                ime = ctx,
+                                layout = layout,
+                                keyboardDef = ctx.currentKeyboardDefinition ?: layout.keyboardDefinition,
+                                settings = s.copy(autocorrectActiveLanguage = next),
+                            )
+                            if (s.showToastOnLayoutSwitch.toBool()) {
+                                Toast
+                                    .makeText(context, LayoutLanguageResolver.displayNameForSpacebar(next), Toast.LENGTH_SHORT)
+                                    .show()
                             }
                         }
                     },

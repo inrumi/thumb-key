@@ -75,6 +75,12 @@ val SWITCH_LANGUAGE_KEYC =
         action = SwitchLanguage,
         color = MUTED,
     )
+val CYCLE_AUTOCORRECT_LANGUAGE_KEYC =
+    KeyC(
+        display = KeyDisplay.IconDisplay(Icons.Outlined.Translate),
+        action = CycleAutocorrectLanguage,
+        color = MUTED,
+    )
 val MOVE_KEYBOARD_CYCLE_RIGHT_KEYC =
     KeyC(
         display = KeyDisplay.IconDisplay(Icons.Outlined.LinearScale),
@@ -108,6 +114,7 @@ fun specialActionKeyItem(center: KeyC): KeyItemC =
         center = center,
         top = GOTO_SETTINGS_KEYC,
         topLeft = TOGGLE_HIDE_LETTERS_KEYC,
+        topRight = CYCLE_AUTOCORRECT_LANGUAGE_KEYC,
         bottom = SWITCH_IME_KEYC,
         bottomLeft = SWITCH_IME_VOICE_KEYC,
         left = SWITCH_LANGUAGE_KEYC,

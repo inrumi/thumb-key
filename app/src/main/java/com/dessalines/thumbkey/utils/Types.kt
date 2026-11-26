@@ -329,6 +329,8 @@ sealed class KeyAction {
 
     data object SwitchLanguage : KeyAction()
 
+    data object CycleAutocorrectLanguage : KeyAction()
+
     data object SwitchIME : KeyAction()
 
     data object SwitchIMEVoice : KeyAction()
@@ -501,3 +503,11 @@ data class ReleasedKeyFeedback(
     val originDirection: SwipeDirection?,
     val id: Long,
 )
+
+enum class SuggestionBarFloatingPlacement(
+    @param:StringRes val resId: Int,
+) {
+    AboveKeyboard(R.string.suggestion_bar_placement_above),
+    BelowKeyboard(R.string.suggestion_bar_placement_below),
+    DockedBottom(R.string.suggestion_bar_placement_docked_bottom),
+}

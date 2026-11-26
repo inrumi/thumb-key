@@ -42,12 +42,14 @@ import com.dessalines.thumbkey.R
 import com.dessalines.thumbkey.db.AppSettingsViewModel
 import com.dessalines.thumbkey.db.BehaviorUpdate
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_CAPITALIZE
+import com.dessalines.thumbkey.db.DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION
 import com.dessalines.thumbkey.db.DEFAULT_CIRCULAR_DRAG_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_DRAG_RETURN_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_GHOST_KEYS_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_MIN_SWIPE_LENGTH
+import com.dessalines.thumbkey.db.DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_BACKSPACE_DEADZONE_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_CURSOR_MOVEMENT_MODE
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_ENABLED
@@ -98,6 +100,10 @@ fun BehaviorScreen(
     var spacebarMultiTapsState = (settings?.spacebarMultiTaps ?: DEFAULT_SPACEBAR_MULTITAPS).toBool()
     var switchToLettersAfterSpaceState =
         (settings?.switchToLettersAfterSpace ?: DEFAULT_SWITCH_TO_LETTERS_AFTER_SPACE).toBool()
+    var autoSpaceAfterPunctuationState =
+        (settings?.autoSpaceAfterPunctuation ?: DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION).toBool()
+    var removeSpaceBeforePunctuationState =
+        (settings?.removeSpaceBeforePunctuation ?: DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION).toBool()
 
     var dragReturnEnabledState = (settings?.dragReturnEnabled ?: DEFAULT_DRAG_RETURN_ENABLED).toBool()
     var circularDragEnabledState = (settings?.circularDragEnabled ?: DEFAULT_CIRCULAR_DRAG_ENABLED).toBool()
@@ -134,6 +140,8 @@ fun BehaviorScreen(
                 ghostKeysEnabled = ghostKeysEnabledState.toInt(),
                 slideHoldEnabled = slideHoldEnabledState.toInt(),
                 switchImeMode = switchImeModeState.ordinal,
+                autoSpaceAfterPunctuation = autoSpaceAfterPunctuationState.toInt(),
+                removeSpaceBeforePunctuation = removeSpaceBeforePunctuationState.toInt(),
             ),
         )
     }
@@ -206,6 +214,24 @@ fun BehaviorScreen(
                                 contentDescription = null,
                             )
                         },
+                    )
+                    SwitchPreference(
+                        value = removeSpaceBeforePunctuationState,
+                        onValueChange = {
+                            removeSpaceBeforePunctuationState = it
+                            updateBehavior()
+                        },
+                        title = { Text(stringResource(R.string.remove_space_before_punctuation)) },
+                        summary = { Text(stringResource(R.string.remove_space_before_punctuation_description)) },
+                    )
+                    SwitchPreference(
+                        value = autoSpaceAfterPunctuationState,
+                        onValueChange = {
+                            autoSpaceAfterPunctuationState = it
+                            updateBehavior()
+                        },
+                        title = { Text(stringResource(R.string.auto_space_after_punctuation)) },
+                        summary = { Text(stringResource(R.string.auto_space_after_punctuation_description)) },
                     )
                     SliderPreference(
                         value = minSwipeLengthState,

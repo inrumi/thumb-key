@@ -15,6 +15,9 @@ import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.LinearLayout
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntRect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -27,10 +30,15 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.dessalines.thumbkey.autocorrect.AutocorrectSession
+import com.dessalines.thumbkey.db.AppSettings
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLIPBOARD_HISTORY_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_DISABLE_FULLSCREEN_EDITOR
 import com.dessalines.thumbkey.db.DEFAULT_POSITION
 import com.dessalines.thumbkey.db.DEFAULT_SHOW_ON_SCREEN_KEYBOARD
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTIONS_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_IME_MODE
 import com.dessalines.thumbkey.db.DEFAULT_USE_PRIVATE_CLIPBOARD
 import com.dessalines.thumbkey.ui.components.keyboard.SketchState
@@ -75,6 +83,21 @@ class IMEService :
     }
 
     var currentKeyboardDefinition: KeyboardDefinition? = null
+    var inputSessionVersion by mutableIntStateOf(0)
+        private set
+    var editorInputType by mutableIntStateOf(EditorInfo.TYPE_NULL)
+        private set
+    var autocorrectSession: AutocorrectSession? = null
+        private set
+
+    val currentAppSettings: AppSettings?
+        get() = (application as ThumbkeyApplication).appSettingsRepository.appSettings.value
+
+    val currentKeyboardLayout: KeyboardLayout
+        get() {
+            val layoutIndex = currentAppSettings?.keyboardLayout ?: return KeyboardLayout.ENThumbKey
+            return KeyboardLayout.entries.getOrElse(layoutIndex) { KeyboardLayout.ENThumbKey }
+        }
 
     // While set, the keys type into this field of the keyboard's own, like sketch mode's
     // search, instead of the app's
@@ -97,6 +120,7 @@ class IMEService :
     private var clipboardManager: ThumbKeyClipboardManager? = null
     private var isFloatingMode: Boolean = false
     private var floatingPanelBounds: Rect? = null
+    private var dockedBarBounds: Rect? = null
     private var imeNavBarBottomPx: Int = 0
 
     private fun isFloatingPosition(position: Int?): Boolean = (position ?: DEFAULT_POSITION) == KeyboardPosition.Floating.ordinal
@@ -106,6 +130,14 @@ class IMEService :
         if (rect != floatingPanelBounds) {
             floatingPanelBounds = rect
             window?.window?.decorView?.requestLayout()
+        }
+    }
+
+    fun onDockedBarBounds(bounds: IntRect?) {
+        val rect = bounds?.let { Rect(it.left, it.top, it.right, it.bottom) }
+        if (rect != dockedBarBounds) {
+            dockedBarBounds = rect
+            if (isFloatingMode) window?.window?.decorView?.requestLayout()
         }
     }
 
@@ -180,6 +212,9 @@ class IMEService :
     ) {
         super.onStartInput(attribute, restarting)
         setInputRedirect(null)
+        editorInputType = attribute?.inputType ?: EditorInfo.TYPE_NULL
+        inputSessionVersion++
+        autocorrectSession?.onStartInput(attribute, this)
         // A new keyboard opens on the letters: close sketch mode's search and lists, but keep
         // its drawing
         sketchState.searching = false
@@ -192,10 +227,39 @@ class IMEService :
             )
         if (!isFloatingMode) {
             floatingPanelBounds = null
+            dockedBarBounds = null
         }
         val view = this.setupView()
         this.setInputView(view)
         window?.window?.let { applyFloatingWindowLayout(it) }
+    }
+
+    override fun onStartInputView(
+        info: EditorInfo?,
+        restarting: Boolean,
+    ) {
+        super.onStartInputView(info, restarting)
+        if (info != null) {
+            editorInputType = info.inputType
+        }
+        syncContextModelLoading((application as ThumbkeyApplication).appSettingsRepository.appSettings.value)
+        autocorrectSession?.refreshSuggestions(this)
+    }
+
+    private fun syncContextModelLoading(settings: AppSettings?) {
+        val app = application as ThumbkeyApplication
+        val shouldLoadLm =
+            (settings?.autocorrectContextModelEnabled ?: DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED).toBool() &&
+                (
+                    (settings?.autocorrectEnabled ?: DEFAULT_AUTOCORRECT_ENABLED).toBool() ||
+                        (settings?.suggestionsEnabled ?: DEFAULT_SUGGESTIONS_ENABLED).toBool()
+                )
+        app.dictionaryManager.ensureContextModelLoadedAsync(shouldLoadLm)
+    }
+
+    override fun onFinishInput() {
+        autocorrectSession?.onFinishInput(currentInputEditorInfo)
+        super.onFinishInput()
     }
 
     // Lifecycle Methods
@@ -217,11 +281,13 @@ class IMEService :
                     ?.position,
             )
         app.appSettingsRepository.appSettings.observe(this) { settings ->
+            syncContextModelLoading(settings)
             val nextFloating = isFloatingPosition(settings?.position)
             if (nextFloating != isFloatingMode) {
                 isFloatingMode = nextFloating
                 if (!nextFloating) {
                     floatingPanelBounds = null
+                    dockedBarBounds = null
                 }
                 window?.window?.let { applyFloatingWindowLayout(it) }
                 updateFullscreenMode()
@@ -236,6 +302,9 @@ class IMEService :
         clipboardManager = ThumbKeyClipboardManager(this, app.clipboardRepository)
         clipboardManager?.startListening()
         clipboardManager?.clearExpired()
+
+        app.dictionaryManager.ensureInitializedAsync()
+        autocorrectSession = AutocorrectSession(app.dictionaryManager)
     }
 
     override fun onConfigureWindow(
@@ -261,16 +330,26 @@ class IMEService :
         val decorHeight = decorView.height
         if (decorHeight <= 0) return
         val band = imeNavBarBottomPx.coerceIn(0, decorHeight)
-        val top = decorHeight - band
-        outInsets.contentTopInsets = top
-        outInsets.visibleTopInsets = top
+        val navTop = decorHeight - band
+        val barBounds = dockedBarBounds
+        val contentTop =
+            if (barBounds != null && !barBounds.isEmpty && barBounds.top in 1 until navTop) {
+                barBounds.top
+            } else {
+                navTop
+            }
+        outInsets.contentTopInsets = contentTop
+        outInsets.visibleTopInsets = contentTop
         val bounds = floatingPanelBounds
         if (bounds != null) {
             outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
             outInsets.touchableRegion.setEmpty()
             outInsets.touchableRegion.set(bounds)
+            if (barBounds != null && !barBounds.isEmpty) {
+                outInsets.touchableRegion.op(barBounds, Region.Op.UNION)
+            }
             if (band > 0) {
-                outInsets.touchableRegion.op(0, top, decorView.width, decorHeight, Region.Op.UNION)
+                outInsets.touchableRegion.op(0, navTop, decorView.width, decorHeight, Region.Op.UNION)
             }
         }
     }
@@ -278,6 +357,7 @@ class IMEService :
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         floatingPanelBounds = null
+        dockedBarBounds = null
         window?.window?.let { applyFloatingWindowLayout(it) }
         window?.window?.decorView?.let { decorView ->
             decorView.requestApplyInsets()
@@ -286,10 +366,30 @@ class IMEService :
     }
 
     override fun onDestroy() {
+        autocorrectSession?.close()
         clipboardManager?.stopListening()
         clipboardManager = null
         super.onDestroy()
         handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+    }
+
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(
+            oldSelStart,
+            oldSelEnd,
+            newSelStart,
+            newSelEnd,
+            candidatesStart,
+            candidatesEnd,
+        )
+        autocorrectSession?.onCursorUpdated(oldSelStart, oldSelEnd, newSelStart, newSelEnd, this)
     }
 
     // Cursor update Methods
@@ -312,6 +412,13 @@ class IMEService :
             selectionEnd,
             cursorAnchorInfo.selectionStart,
             cursorAnchorInfo.selectionEnd,
+        )
+        autocorrectSession?.onCursorUpdated(
+            selectionStart,
+            selectionEnd,
+            cursorAnchorInfo.selectionStart,
+            cursorAnchorInfo.selectionEnd,
+            this,
         )
 
         selectionStart = cursorAnchorInfo.selectionStart
@@ -353,6 +460,7 @@ class IMEService :
         // Must run before super, which commits any composing text as it stands.
         // Running after it would let the processor write its pending text a second time.
         currentKeyboardDefinition?.settings?.textProcessor?.handleFinishInput(this)
+        autocorrectSession?.onFinishInput(currentInputEditorInfo)
         super.onFinishInputView(finishingInput)
     }
 

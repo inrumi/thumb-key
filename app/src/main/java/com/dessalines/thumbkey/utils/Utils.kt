@@ -347,6 +347,7 @@ fun performKeyAction(
     onToggleHideLetters: () -> Unit,
     onAutoCapitalize: (enable: Boolean) -> Unit,
     onSwitchLanguage: () -> Unit,
+    onCycleAutocorrectLanguage: () -> Unit = {},
     onChangePosition: ((old: KeyboardPosition) -> KeyboardPosition) -> Unit,
     onKeyEvent: (action: KeyAction) -> Unit,
     onSketchAction: (action: KeyAction.Sketch) -> Unit = {},
@@ -357,11 +358,24 @@ fun performKeyAction(
             Log.d(TAG, "committing key text: $text")
             ime.ignoreNextCursorMove()
 
-            keyboardSettings.textProcessor?.handleCommitText(ime, text)
-                ?: ime.currentInputConnection.commitText(
+            val processor = keyboardSettings.textProcessor
+            val session = ime.autocorrectSession
+            if (processor != null) {
+                processor.handleCommitText(ime, text)
+            } else if (session != null) {
+                session.handleCommitText(
+                    ime = ime,
+                    text = text,
+                    layout = ime.currentKeyboardLayout,
+                    keyboardDef = ime.currentKeyboardDefinition ?: ime.currentKeyboardLayout.keyboardDefinition,
+                    settings = ime.currentAppSettings,
+                )
+            } else {
+                ime.currentInputConnection.commitText(
                     text,
                     1,
                 )
+            }
 
             if (autoCapitalize && keyboardSettings.autoShift) {
                 autoCapitalize(
@@ -386,15 +400,25 @@ fun performKeyAction(
         // Some apps are having problems with delete key events, and issues need to be opened up
         // on their repos.
         is KeyAction.DeleteKeyAction -> {
+            val processor = keyboardSettings.textProcessor
+            val session = ime.autocorrectSession
             val ev = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL)
-            keyboardSettings.textProcessor?.handleKeyEvent(ime, ev)
-                ?: ime.currentInputConnection.sendKeyEvent(ev)
+            if (processor != null) {
+                processor.handleKeyEvent(ime, ev)
+            } else if (session == null || !session.handleDeleteKey(ime)) {
+                ime.currentInputConnection.sendKeyEvent(ev)
+                session?.scheduleRefreshSuggestions(ime)
+            }
         }
 
         is KeyAction.DeleteCharacterAfterCursor -> {
+            ime.autocorrectSession?.clearUndoState()
             val ev = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_FORWARD_DEL)
             keyboardSettings.textProcessor?.handleKeyEvent(ime, ev)
-                ?: ime.currentInputConnection.sendKeyEvent(ev)
+                ?: run {
+                    ime.currentInputConnection.sendKeyEvent(ev)
+                    ime.autocorrectSession?.scheduleRefreshSuggestions(ime)
+                }
         }
 
         // Alternative delete that uses deleteSurroundingText instead of KEYCODE_DEL.
@@ -409,7 +433,9 @@ fun performKeyAction(
 
             if (inputType == EditorInfo.TYPE_NULL) {
                 // Raw editor (like Termux) - use key event
+                ime.autocorrectSession?.handleDeleteViaManipulation()
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+                ime.autocorrectSession?.scheduleRefreshSuggestions(ime)
             } else {
                 val selectedText = ic.getSelectedText(0)
                 if (!selectedText.isNullOrEmpty()) {
@@ -430,6 +456,7 @@ fun performKeyAction(
                         ic.deleteSurroundingText(deleteCount, 0)
                     }
                 }
+                ime.autocorrectSession?.handleDeleteViaManipulation(ime)
             }
         }
 
@@ -437,12 +464,16 @@ fun performKeyAction(
             Log.d(TAG, "deleting last word")
             keyboardSettings.textProcessor?.handleFinishInput(ime)
             deleteWordBeforeCursor(ime)
+            ime.autocorrectSession?.clearUndoState(ime)
+            ime.autocorrectSession?.scheduleRefreshSuggestions(ime)
         }
 
         is KeyAction.DeleteWordAfterCursor -> {
             Log.d(TAG, "deleting next word")
             keyboardSettings.textProcessor?.handleFinishInput(ime)
             deleteWordAfterCursor(ime)
+            ime.autocorrectSession?.clearUndoState(ime)
+            ime.autocorrectSession?.scheduleRefreshSuggestions(ime)
         }
 
         is KeyAction.PreviousWordBeforeCursor -> {
@@ -503,6 +534,7 @@ fun performKeyAction(
                 text,
                 1,
             )
+            ime.autocorrectSession?.handleReplaceLastText(ime)
             if (autoCapitalize && keyboardSettings.autoShift) {
                 autoCapitalize(
                     ime = ime,
@@ -1248,6 +1280,7 @@ fun performKeyAction(
         is KeyAction.ToggleShiftMode -> {
             val enable = action.enable
             Log.d(TAG, "Toggling Shifted: $enable")
+            ime.autocorrectSession?.onToggleShiftMode(enable)
             onToggleShiftMode(enable)
         }
 
@@ -1302,6 +1335,14 @@ fun performKeyAction(
         }
 
         KeyAction.IMECompleteAction -> {
+            if (keyboardSettings.textProcessor == null) {
+                ime.autocorrectSession?.handleImeCompleteAction(
+                    ime = ime,
+                    layout = ime.currentKeyboardLayout,
+                    keyboardDef = ime.currentKeyboardDefinition ?: ime.currentKeyboardLayout.keyboardDefinition,
+                    settings = ime.currentAppSettings,
+                )
+            }
             // A lot of apps like discord and slack use weird IME actions,
             // so its best to only check the none case
             when (val imeAction = getImeActionCode(ime)) {
@@ -1497,6 +1538,10 @@ fun performKeyAction(
 
         KeyAction.SwitchLanguage -> {
             onSwitchLanguage()
+        }
+
+        KeyAction.CycleAutocorrectLanguage -> {
+            onCycleAutocorrectLanguage()
         }
 
         KeyAction.SwitchIME -> {
@@ -1782,6 +1827,49 @@ fun isPasswordField(ime: IMEService): Boolean {
         InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
         InputType.TYPE_NUMBER_VARIATION_PASSWORD,
     ).contains(inputType)
+}
+
+fun isUriOrEmailOrPasswordInputType(inputType: Int): Boolean {
+    if (inputType == EditorInfo.TYPE_NULL) return true
+    val typeClass = inputType and InputType.TYPE_MASK_CLASS
+    val variation = inputType and InputType.TYPE_MASK_VARIATION
+    return when (typeClass) {
+        InputType.TYPE_CLASS_TEXT -> {
+            variation == InputType.TYPE_TEXT_VARIATION_URI ||
+                variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+                variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
+                variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+
+        InputType.TYPE_CLASS_NUMBER -> {
+            variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
+
+        else -> {
+            false
+        }
+    }
+}
+
+fun allowsAutocorrectForInputType(inputType: Int): Boolean {
+    if (inputType == EditorInfo.TYPE_NULL) return false
+    if ((inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) return false
+    return !isUriOrEmailOrPasswordInputType(inputType)
+}
+
+fun isNoPersonalizedLearning(editorInfo: EditorInfo?): Boolean {
+    if (editorInfo == null) return false
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        (editorInfo.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+    ) {
+        return true
+    }
+    return editorInfo.privateImeOptions
+        ?.split(',')
+        ?.any { it.trim().endsWith("noPersonalizedLearning", ignoreCase = true) }
+        ?: false
 }
 
 fun deleteWordBeforeCursor(ime: IMEService) {

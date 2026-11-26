@@ -86,6 +86,25 @@ const val DEFAULT_FLOATING_X_FRACTION = 0.5f
 const val DEFAULT_FLOATING_Y_FRACTION = 1.0f
 const val DEFAULT_KEY_ANIMATION_TYPE = 0
 const val DEFAULT_SWIPE_TRAIL_ENABLED = 0
+const val DEFAULT_AUTOCORRECT_ENABLED = 0
+const val DEFAULT_AUTOCORRECT_CONFIDENCE = 40
+const val MIN_AUTOCORRECT_CONFIDENCE = 15
+const val MAX_AUTOCORRECT_CONFIDENCE = 100
+const val DEFAULT_AUTOCORRECT_UNDO_ON_BACKSPACE = 1
+const val DEFAULT_AUTOCORRECT_BEFORE_PUNCTUATION = 1
+const val DEFAULT_AUTOCORRECT_BEFORE_ENTER = 0
+const val DEFAULT_AUTOCORRECT_FIX_APOSTROPHES = 1
+const val DEFAULT_AUTOCORRECT_DICTIONARY_CAPITALS = 1
+const val DEFAULT_AUTOCORRECT_SKIP_ALL_CAPS = 1
+const val DEFAULT_AUTOCORRECT_LEARN_WORDS = 1
+const val DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION = 0
+const val DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION = 1
+const val DEFAULT_SUGGESTIONS_ENABLED = 0
+const val DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT = 0
+const val DEFAULT_SUGGESTIONS_EMOJI_ENABLED = 1
+const val DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED = 1
+const val DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES = ""
+const val DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE = ""
 
 @Entity
 data class AppSettings(
@@ -393,6 +412,91 @@ data class AppSettings(
         defaultValue = DEFAULT_SWIPE_TRAIL_ENABLED.toString(),
     )
     val swipeTrailEnabled: Int = DEFAULT_SWIPE_TRAIL_ENABLED,
+    @ColumnInfo(
+        name = "autocorrect_enabled",
+        defaultValue = DEFAULT_AUTOCORRECT_ENABLED.toString(),
+    )
+    val autocorrectEnabled: Int = DEFAULT_AUTOCORRECT_ENABLED,
+    @ColumnInfo(
+        name = "autocorrect_confidence",
+        defaultValue = DEFAULT_AUTOCORRECT_CONFIDENCE.toString(),
+    )
+    val autocorrectConfidence: Int = DEFAULT_AUTOCORRECT_CONFIDENCE,
+    @ColumnInfo(
+        name = "autocorrect_undo_on_backspace",
+        defaultValue = DEFAULT_AUTOCORRECT_UNDO_ON_BACKSPACE.toString(),
+    )
+    val autocorrectUndoOnBackspace: Int = DEFAULT_AUTOCORRECT_UNDO_ON_BACKSPACE,
+    @ColumnInfo(
+        name = "autocorrect_before_punctuation",
+        defaultValue = DEFAULT_AUTOCORRECT_BEFORE_PUNCTUATION.toString(),
+    )
+    val autocorrectBeforePunctuation: Int = DEFAULT_AUTOCORRECT_BEFORE_PUNCTUATION,
+    @ColumnInfo(
+        name = "autocorrect_before_enter",
+        defaultValue = DEFAULT_AUTOCORRECT_BEFORE_ENTER.toString(),
+    )
+    val autocorrectBeforeEnter: Int = DEFAULT_AUTOCORRECT_BEFORE_ENTER,
+    @ColumnInfo(
+        name = "autocorrect_fix_apostrophes",
+        defaultValue = DEFAULT_AUTOCORRECT_FIX_APOSTROPHES.toString(),
+    )
+    val autocorrectFixApostrophes: Int = DEFAULT_AUTOCORRECT_FIX_APOSTROPHES,
+    @ColumnInfo(
+        name = "autocorrect_dictionary_capitals",
+        defaultValue = DEFAULT_AUTOCORRECT_DICTIONARY_CAPITALS.toString(),
+    )
+    val autocorrectDictionaryCapitals: Int = DEFAULT_AUTOCORRECT_DICTIONARY_CAPITALS,
+    @ColumnInfo(
+        name = "autocorrect_skip_all_caps",
+        defaultValue = DEFAULT_AUTOCORRECT_SKIP_ALL_CAPS.toString(),
+    )
+    val autocorrectSkipAllCaps: Int = DEFAULT_AUTOCORRECT_SKIP_ALL_CAPS,
+    @ColumnInfo(
+        name = "autocorrect_learn_words",
+        defaultValue = DEFAULT_AUTOCORRECT_LEARN_WORDS.toString(),
+    )
+    val autocorrectLearnWords: Int = DEFAULT_AUTOCORRECT_LEARN_WORDS,
+    @ColumnInfo(
+        name = "auto_space_after_punctuation",
+        defaultValue = DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION.toString(),
+    )
+    val autoSpaceAfterPunctuation: Int = DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION,
+    @ColumnInfo(
+        name = "remove_space_before_punctuation",
+        defaultValue = DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION.toString(),
+    )
+    val removeSpaceBeforePunctuation: Int = DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION,
+    @ColumnInfo(
+        name = "suggestions_enabled",
+        defaultValue = DEFAULT_SUGGESTIONS_ENABLED.toString(),
+    )
+    val suggestionsEnabled: Int = DEFAULT_SUGGESTIONS_ENABLED,
+    @ColumnInfo(
+        name = "suggestion_bar_floating_placement",
+        defaultValue = DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT.toString(),
+    )
+    val suggestionBarFloatingPlacement: Int = DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT,
+    @ColumnInfo(
+        name = "suggestions_emoji_enabled",
+        defaultValue = DEFAULT_SUGGESTIONS_EMOJI_ENABLED.toString(),
+    )
+    val suggestionsEmojiEnabled: Int = DEFAULT_SUGGESTIONS_EMOJI_ENABLED,
+    @ColumnInfo(
+        name = "autocorrect_context_model_enabled",
+        defaultValue = DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED.toString(),
+    )
+    val autocorrectContextModelEnabled: Int = DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED,
+    @ColumnInfo(
+        name = "autocorrect_additional_languages",
+        defaultValue = DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES,
+    )
+    val autocorrectAdditionalLanguages: String = DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES,
+    @ColumnInfo(
+        name = "autocorrect_active_language",
+        defaultValue = DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE,
+    )
+    val autocorrectActiveLanguage: String = DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE,
 )
 
 data class LayoutsUpdate(
@@ -565,6 +669,50 @@ data class BehaviorUpdate(
     val slideHoldEnabled: Int,
     @ColumnInfo(name = "switch_ime_mode")
     val switchImeMode: Int = DEFAULT_SWITCH_IME_MODE,
+    @ColumnInfo(name = "auto_space_after_punctuation")
+    val autoSpaceAfterPunctuation: Int = DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION,
+    @ColumnInfo(name = "remove_space_before_punctuation")
+    val removeSpaceBeforePunctuation: Int = DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION,
+)
+
+data class AutocorrectSettingsUpdate(
+    val id: Int,
+    @ColumnInfo(name = "autocorrect_enabled")
+    val autocorrectEnabled: Int,
+    @ColumnInfo(name = "autocorrect_confidence")
+    val autocorrectConfidence: Int,
+    @ColumnInfo(name = "autocorrect_undo_on_backspace")
+    val autocorrectUndoOnBackspace: Int,
+    @ColumnInfo(name = "autocorrect_before_punctuation")
+    val autocorrectBeforePunctuation: Int,
+    @ColumnInfo(name = "autocorrect_before_enter")
+    val autocorrectBeforeEnter: Int,
+    @ColumnInfo(name = "autocorrect_fix_apostrophes")
+    val autocorrectFixApostrophes: Int,
+    @ColumnInfo(name = "autocorrect_dictionary_capitals")
+    val autocorrectDictionaryCapitals: Int,
+    @ColumnInfo(name = "autocorrect_skip_all_caps")
+    val autocorrectSkipAllCaps: Int,
+    @ColumnInfo(name = "autocorrect_learn_words")
+    val autocorrectLearnWords: Int,
+    @ColumnInfo(name = "suggestions_enabled")
+    val suggestionsEnabled: Int = DEFAULT_SUGGESTIONS_ENABLED,
+    @ColumnInfo(name = "suggestion_bar_floating_placement")
+    val suggestionBarFloatingPlacement: Int = DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT,
+    @ColumnInfo(name = "suggestions_emoji_enabled")
+    val suggestionsEmojiEnabled: Int = DEFAULT_SUGGESTIONS_EMOJI_ENABLED,
+    @ColumnInfo(name = "autocorrect_context_model_enabled")
+    val autocorrectContextModelEnabled: Int = DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED,
+    @ColumnInfo(name = "autocorrect_additional_languages")
+    val autocorrectAdditionalLanguages: String = DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES,
+    @ColumnInfo(name = "autocorrect_active_language")
+    val autocorrectActiveLanguage: String = DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE,
+)
+
+data class AutocorrectActiveLanguageUpdate(
+    val id: Int,
+    @ColumnInfo(name = "autocorrect_active_language")
+    val autocorrectActiveLanguage: String,
 )
 
 data class KeyModificationsUpdate(
@@ -631,6 +779,12 @@ interface AppSettingsDao {
     @Update(entity = AppSettings::class)
     fun updateOtherSettings(otherSettings: OtherSettingsUpdate)
 
+    @Update(entity = AppSettings::class)
+    fun updateAutocorrectSettings(autocorrectSettings: AutocorrectSettingsUpdate)
+
+    @Update(entity = AppSettings::class)
+    suspend fun updateAutocorrectActiveLanguage(update: AutocorrectActiveLanguageUpdate)
+
     @Query("UPDATE AppSettings SET last_version_code_viewed = :versionCode")
     suspend fun updateLastVersionCode(versionCode: Int)
 }
@@ -688,6 +842,16 @@ class AppSettingsRepository(
     }
 
     @WorkerThread
+    fun updateAutocorrectSettings(autocorrectSettings: AutocorrectSettingsUpdate) {
+        appSettingsDao.updateAutocorrectSettings(autocorrectSettings)
+    }
+
+    @WorkerThread
+    suspend fun updateAutocorrectActiveLanguage(update: AutocorrectActiveLanguageUpdate) {
+        appSettingsDao.updateAutocorrectActiveLanguage(update)
+    }
+
+    @WorkerThread
     suspend fun updateLastVersionCodeViewed(versionCode: Int) {
         appSettingsDao.updateLastVersionCode(versionCode)
     }
@@ -710,7 +874,7 @@ class AppSettingsRepository(
 }
 
 @Database(
-    version = 31,
+    version = 32,
     entities = [AppSettings::class],
     exportSchema = true,
 )
@@ -763,6 +927,7 @@ abstract class AppDB : RoomDatabase() {
                             MIGRATION_28_29,
                             MIGRATION_29_30,
                             MIGRATION_30_31,
+                            MIGRATION_31_32,
                         )
                         // Necessary because it can't insert data on creation
                         .addCallback(
@@ -833,6 +998,11 @@ class AppSettingsViewModel(
     fun updateOtherSettings(otherSettings: OtherSettingsUpdate) =
         viewModelScope.launch {
             repository.updateOtherSettings(otherSettings)
+        }
+
+    fun updateAutocorrectSettings(autocorrectSettings: AutocorrectSettingsUpdate) =
+        viewModelScope.launch {
+            repository.updateAutocorrectSettings(autocorrectSettings)
         }
 
     fun updateLastVersionCodeViewed(versionCode: Int) =

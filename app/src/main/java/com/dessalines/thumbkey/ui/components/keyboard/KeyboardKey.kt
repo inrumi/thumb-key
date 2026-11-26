@@ -46,12 +46,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import com.dessalines.thumbkey.IMEService
 import com.dessalines.thumbkey.utils.CircularDirection
 import com.dessalines.thumbkey.utils.CircularDragAction
+import com.dessalines.thumbkey.utils.ColorVariant
 import com.dessalines.thumbkey.utils.FontSizeVariant
 import com.dessalines.thumbkey.utils.KeyAction
 import com.dessalines.thumbkey.utils.KeyAnimationType
@@ -144,6 +147,7 @@ fun KeyboardKey(
     onToggleHideLetters: () -> Unit,
     onAutoCapitalize: (enable: Boolean) -> Unit,
     onSwitchLanguage: () -> Unit,
+    onCycleAutocorrectLanguage: () -> Unit = {},
     onChangePosition: ((old: KeyboardPosition) -> KeyboardPosition) -> Unit,
     onKeyEvent: (action: KeyAction) -> Unit,
     oppositeCaseKey: KeyItemC? = null,
@@ -153,6 +157,8 @@ fun KeyboardKey(
     clockwiseDragAction: CircularDragAction,
     counterclockwiseDragAction: CircularDragAction,
     slideHoldEnabled: Boolean,
+    spacebarLabel: String? = null,
+    spacebarShortLabel: String? = null,
     onSketchAction: (action: KeyAction.Sketch) -> Unit = {},
 ) {
     // Necessary for swipe settings to get updated correctly
@@ -418,6 +424,7 @@ fun KeyboardKey(
                         onToggleHideLetters = onToggleHideLetters,
                         onAutoCapitalize = onAutoCapitalize,
                         onSwitchLanguage = onSwitchLanguage,
+                        onCycleAutocorrectLanguage = onCycleAutocorrectLanguage,
                         onChangePosition = onChangePosition,
                         onKeyEvent = onKeyEvent,
                         onSketchAction = onSketchAction,
@@ -442,6 +449,7 @@ fun KeyboardKey(
                             onToggleHideLetters = onToggleHideLetters,
                             onAutoCapitalize = onAutoCapitalize,
                             onSwitchLanguage = onSwitchLanguage,
+                            onCycleAutocorrectLanguage = onCycleAutocorrectLanguage,
                             onChangePosition = onChangePosition,
                             onKeyEvent = onKeyEvent,
                             onSketchAction = onSketchAction,
@@ -746,6 +754,7 @@ fun KeyboardKey(
                                 onToggleHideLetters = onToggleHideLetters,
                                 onAutoCapitalize = onAutoCapitalize,
                                 onSwitchLanguage = onSwitchLanguage,
+                                onCycleAutocorrectLanguage = onCycleAutocorrectLanguage,
                                 onChangePosition = onChangePosition,
                                 onKeyEvent = onKeyEvent,
                                 onSketchAction = onSketchAction,
@@ -785,6 +794,7 @@ fun KeyboardKey(
                                         onToggleHideLetters = onToggleHideLetters,
                                         onAutoCapitalize = onAutoCapitalize,
                                         onSwitchLanguage = onSwitchLanguage,
+                                        onCycleAutocorrectLanguage = onCycleAutocorrectLanguage,
                                         onChangePosition = onChangePosition,
                                         onKeyEvent = onKeyEvent,
                                         onSketchAction = onSketchAction,
@@ -917,7 +927,33 @@ fun KeyboardKey(
                 Modifier
                     .fillMaxSize(),
         ) {
-            KeyText(key.center, (keySize - keyBorderWidth).dp, hideLetters, hideSymbols, capsLock)
+            val isBlankSpacebar =
+                key.slideType == SlideType.MOVE_CURSOR &&
+                    (
+                        key.center.display == null ||
+                            (key.center.display as? KeyDisplay.TextDisplay)?.text?.isBlank() == true
+                    )
+            val resolvedSpacebarText =
+                if (key.widthMultiplier <= 1 && !spacebarShortLabel.isNullOrEmpty()) {
+                    spacebarShortLabel
+                } else {
+                    spacebarLabel
+                }
+            if (isBlankSpacebar && !resolvedSpacebarText.isNullOrEmpty()) {
+                val labelFontSize = (keyHeight * 0.21f).coerceIn(10f, 13f).sp
+                Text(
+                    text = resolvedSpacebarText,
+                    fontSize = labelFontSize,
+                    lineHeight = labelFontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = colorVariantToColor(ColorVariant.MUTED).copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+            } else {
+                KeyText(key.center, (keySize - keyBorderWidth).dp, hideLetters, hideSymbols, capsLock)
+            }
         }
 
         Box(
