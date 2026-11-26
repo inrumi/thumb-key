@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.util.Log
 import android.view.HapticFeedbackConstants
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection.CURSOR_UPDATE_MONITOR
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -11,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +20,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
@@ -29,10 +33,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -46,6 +56,7 @@ import com.dessalines.thumbkey.db.DEFAULT_ANIMATION_SPEED
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_CAPITALIZE
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_SIZE_KEYS
 import com.dessalines.thumbkey.db.DEFAULT_BACKDROP_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_BACKSPACE_HOLD_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_CIRCULAR_DRAG_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLIPBOARD_HISTORY_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLOCKWISE_DRAG_ACTION
@@ -57,6 +68,8 @@ import com.dessalines.thumbkey.db.DEFAULT_FLOATING_Y_FRACTION
 import com.dessalines.thumbkey.db.DEFAULT_GHOST_KEYS_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_HIDE_LETTERS
 import com.dessalines.thumbkey.db.DEFAULT_HIDE_SYMBOLS
+import com.dessalines.thumbkey.db.DEFAULT_HOLD_DURATION_MS
+import com.dessalines.thumbkey.db.DEFAULT_HOLD_KEY_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_IGNORE_BOTTOM_PADDING
 import com.dessalines.thumbkey.db.DEFAULT_KEYBOARD_LAYOUT
 import com.dessalines.thumbkey.db.DEFAULT_KEYBOARD_OPACITY
@@ -68,6 +81,7 @@ import com.dessalines.thumbkey.db.DEFAULT_KEY_RADIUS
 import com.dessalines.thumbkey.db.DEFAULT_KEY_WIDTH
 import com.dessalines.thumbkey.db.DEFAULT_MIN_SWIPE_LENGTH
 import com.dessalines.thumbkey.db.DEFAULT_NON_SQUARE_KEYS
+import com.dessalines.thumbkey.db.DEFAULT_NUMERIC_LAYOUT_ORDER
 import com.dessalines.thumbkey.db.DEFAULT_POSITION
 import com.dessalines.thumbkey.db.DEFAULT_POSITION_PADDING
 import com.dessalines.thumbkey.db.DEFAULT_PUSHUP_SIZE
@@ -83,27 +97,38 @@ import com.dessalines.thumbkey.db.DEFAULT_SWIPE_TRAIL_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_TO_LETTERS_AFTER_SPACE
 import com.dessalines.thumbkey.db.DEFAULT_VIBRATE_ON_SLIDE
 import com.dessalines.thumbkey.db.DEFAULT_VIBRATE_ON_TAP
+import com.dessalines.thumbkey.db.MAX_HOLD_DURATION_MS
 import com.dessalines.thumbkey.db.MAX_KEYBOARD_OPACITY
+import com.dessalines.thumbkey.db.MIN_HOLD_DURATION_MS
 import com.dessalines.thumbkey.db.MIN_KEYBOARD_OPACITY
 import com.dessalines.thumbkey.keyboards.BACKSPACE_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.EMOJI_BACK_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.KB_EN_THUMBKEY_MAIN
 import com.dessalines.thumbkey.keyboards.NUMERIC_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.RETURN_KEY_ITEM
+import com.dessalines.thumbkey.utils.BackspaceHoldAction
 import com.dessalines.thumbkey.utils.CircularDragAction
 import com.dessalines.thumbkey.utils.ColorVariant
 import com.dessalines.thumbkey.utils.FloatingHandlePosition
+import com.dessalines.thumbkey.utils.HoldKeyAction
 import com.dessalines.thumbkey.utils.KeyAction
 import com.dessalines.thumbkey.utils.KeyAnimationType
+import com.dessalines.thumbkey.utils.KeyDisplay
+import com.dessalines.thumbkey.utils.KeyItemC
 import com.dessalines.thumbkey.utils.KeyboardLayout
 import com.dessalines.thumbkey.utils.KeyboardMode
 import com.dessalines.thumbkey.utils.KeyboardPosition
+import com.dessalines.thumbkey.utils.NumericLayoutOrder
 import com.dessalines.thumbkey.utils.SlideType
 import com.dessalines.thumbkey.utils.TAG
+import com.dessalines.thumbkey.utils.applyNumericLayoutOrder
+import com.dessalines.thumbkey.utils.findNumericKeyForCell
 import com.dessalines.thumbkey.utils.getAutoKeyWidth
 import com.dessalines.thumbkey.utils.getCurrentLayoutGridColumns
+import com.dessalines.thumbkey.utils.getImeActionCode
 import com.dessalines.thumbkey.utils.getKeyboardMode
 import com.dessalines.thumbkey.utils.getModifiedKeyboardDefinition
+import com.dessalines.thumbkey.utils.imeActionDisplayIcon
 import com.dessalines.thumbkey.utils.isLeftHandedLayout
 import com.dessalines.thumbkey.utils.isPasswordField
 import com.dessalines.thumbkey.utils.keyboardPositionToAlignment
@@ -113,6 +138,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlin.collections.sortedBy
+import kotlin.math.roundToInt
 import kotlin.time.TimeMark
 
 @Composable
@@ -135,7 +161,14 @@ fun KeyboardScreen(
         ]
 
     val keyMods = settings?.keyModifications
-    val keyboardDefinition = resolveKeyboardDefinition(layout, keyMods)
+    val numericLayoutOrder =
+        NumericLayoutOrder.entries.getOrElse(
+            settings?.numericLayoutOrder ?: DEFAULT_NUMERIC_LAYOUT_ORDER,
+        ) { NumericLayoutOrder.Default }
+    val keyboardDefinition =
+        remember(layout, keyMods, numericLayoutOrder) {
+            applyNumericLayoutOrder(resolveKeyboardDefinition(layout, keyMods), numericLayoutOrder)
+        }
 
     var mode by remember {
         val startMode =
@@ -149,6 +182,15 @@ fun KeyboardScreen(
 
     var capsLock by remember {
         mutableStateOf(false)
+    }
+
+    LaunchedEffect(ctx.inputSessionVersion) {
+        mode =
+            getKeyboardMode(
+                ime = ctx,
+                autoCapitalize = settings?.autoCapitalize?.toBool() == true && keyboardDefinition.settings.autoShift,
+            )
+        capsLock = false
     }
 
     // Sketch mode's drawing and candidates, kept while its search uses the letter keys, and
@@ -263,6 +305,19 @@ fun KeyboardScreen(
         CircularDragAction.entries[settings?.counterclockwiseDragAction ?: DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION]
     val ghostKeysEnabled = (settings?.ghostKeysEnabled ?: DEFAULT_GHOST_KEYS_ENABLED).toBool()
     val slideHoldEnabled = (settings?.slideHoldEnabled ?: DEFAULT_SLIDE_HOLD_ENABLED).toBool()
+    val holdKeyAction =
+        HoldKeyAction.entries.getOrElse(settings?.holdKeyAction ?: DEFAULT_HOLD_KEY_ACTION) { HoldKeyAction.None }
+    val backspaceHoldAction =
+        BackspaceHoldAction.entries.getOrElse(
+            settings?.backspaceHoldAction ?: DEFAULT_BACKSPACE_HOLD_ACTION,
+        ) { BackspaceHoldAction.DeleteWord }
+    val holdDurationMs =
+        (settings?.holdDurationMs ?: DEFAULT_HOLD_DURATION_MS).coerceIn(MIN_HOLD_DURATION_MS, MAX_HOLD_DURATION_MS)
+    val baseViewConfiguration = LocalViewConfiguration.current
+    val keyboardViewConfiguration =
+        remember(baseViewConfiguration, holdDurationMs) {
+            CustomLongPressViewConfiguration(baseViewConfiguration, holdDurationMs.toLong())
+        }
 
     val keyboardOpacity = (settings?.keyboardOpacity ?: DEFAULT_KEYBOARD_OPACITY).coerceIn(MIN_KEYBOARD_OPACITY, MAX_KEYBOARD_OPACITY)
     val floatingHandlePosition =
@@ -276,7 +331,12 @@ fun KeyboardScreen(
             settings?.keyAnimationType ?: DEFAULT_KEY_ANIMATION_TYPE,
         ) { KeyAnimationType.SlideFromTop }
     val swipeTrailEnabled = (settings?.swipeTrailEnabled ?: DEFAULT_SWIPE_TRAIL_ENABLED).toBool()
-    val isPassword = remember(ctx) { isPasswordField(ctx) }
+    val isPassword = remember(ctx, ctx.inputSessionVersion) { isPasswordField(ctx) }
+    val imeActionCode =
+        remember(ctx.inputSessionVersion, ctx.editorImeOptions) {
+            if (ctx.currentInputEditorInfo != null) getImeActionCode(ctx) else EditorInfo.IME_ACTION_NONE
+        }
+    val contextualReturnIcon = remember(imeActionCode) { imeActionDisplayIcon(imeActionCode) }
     val effectiveSwipeTrailEnabled = swipeTrailEnabled && !isPassword
     val swipeTrailState = rememberSwipeTrailState()
 
@@ -402,7 +462,7 @@ fun KeyboardScreen(
                             bottomRow.forEach { key ->
                                 Column {
                                     KeyboardKey(
-                                        key = key,
+                                        key = withContextualReturnIcon(key, contextualReturnIcon),
                                         lastAction = lastAction,
                                         legendHeight = effectiveLegendHeight,
                                         legendWidth = effectiveLegendWidth,
@@ -538,6 +598,7 @@ fun KeyboardScreen(
                                         clockwiseDragAction = clockwiseDragAction,
                                         counterclockwiseDragAction = counterclockwiseDragAction,
                                         slideHoldEnabled = slideHoldEnabled,
+                                        backspaceHoldAction = backspaceHoldAction,
                                     )
                                 }
                             }
@@ -605,7 +666,7 @@ fun KeyboardScreen(
                             controllerKeys.forEach { key ->
                                 Column {
                                     KeyboardKey(
-                                        key = key,
+                                        key = withContextualReturnIcon(key, contextualReturnIcon),
                                         lastAction = lastAction,
                                         legendHeight = effectiveLegendHeight,
                                         legendWidth = effectiveLegendWidth,
@@ -747,6 +808,7 @@ fun KeyboardScreen(
                                         clockwiseDragAction = clockwiseDragAction,
                                         counterclockwiseDragAction = counterclockwiseDragAction,
                                         slideHoldEnabled = slideHoldEnabled,
+                                        backspaceHoldAction = backspaceHoldAction,
                                     )
                                 }
                             }
@@ -909,7 +971,7 @@ fun KeyboardScreen(
                         },
                     ) { key, onSketchAction ->
                         KeyboardKey(
-                            key = key,
+                            key = withContextualReturnIcon(key, contextualReturnIcon),
                             lastAction = lastAction,
                             legendHeight = effectiveLegendHeight,
                             legendWidth = effectiveLegendWidth,
@@ -961,6 +1023,7 @@ fun KeyboardScreen(
                             clockwiseDragAction = clockwiseDragAction,
                             counterclockwiseDragAction = counterclockwiseDragAction,
                             slideHoldEnabled = slideHoldEnabled,
+                            backspaceHoldAction = backspaceHoldAction,
                             onSketchAction = onSketchAction,
                         )
                     }
@@ -1032,7 +1095,7 @@ fun KeyboardScreen(
                                                 null
                                             }
                                         KeyboardKey(
-                                            key = key,
+                                            key = withContextualReturnIcon(key, contextualReturnIcon),
                                             ghostKey = ghostKey,
                                             lastAction = lastAction,
                                             legendHeight = effectiveLegendHeight,
@@ -1183,9 +1246,12 @@ fun KeyboardScreen(
                                             numericKey =
                                                 when (mode) {
                                                     KeyboardMode.MAIN, KeyboardMode.SHIFTED, KeyboardMode.CTRLED, KeyboardMode.ALTED -> {
-                                                        keyboardDefinition.modes.numeric.arr
-                                                            .getOrNull(i)
-                                                            ?.getOrNull(j)
+                                                        findNumericKeyForCell(
+                                                            row,
+                                                            j,
+                                                            keyboardDefinition.modes.numeric.arr
+                                                                .getOrNull(i),
+                                                        )
                                                     }
 
                                                     else -> {
@@ -1197,6 +1263,8 @@ fun KeyboardScreen(
                                             clockwiseDragAction = clockwiseDragAction,
                                             counterclockwiseDragAction = counterclockwiseDragAction,
                                             slideHoldEnabled = slideHoldEnabled,
+                                            holdKeyAction = holdKeyAction,
+                                            backspaceHoldAction = backspaceHoldAction,
                                         )
                                     }
                                 }
@@ -1247,54 +1315,119 @@ fun KeyboardScreen(
         }
     }
 
-    if (floatingMode) {
-        FloatingKeyboardFrame(
-            keyWidth = keyWidth,
-            keyHeight = keyHeight,
-            columns = getCurrentLayoutGridColumns(keyboardLayoutIndex),
-            keyboardOpacity = keyboardOpacity,
-            handlePosition = floatingHandlePosition,
-            floatingXFraction = floatingXFraction,
-            floatingYFraction = floatingYFraction,
-            vibrateOnTap = vibrateOnTap,
-            onMoved = onFloatingMoved,
-            onBounds = onFloatingBounds,
-            overlay = {
-                if (effectiveSwipeTrailEnabled) {
-                    SwipeTrailOverlay(
-                        state = swipeTrailState,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                }
-            },
-        ) { floatingKeyWidth, floatingKeyHeight ->
-            renderKeyboardContent(floatingKeyWidth, floatingKeyHeight, true)
-        }
-    } else {
-        val dockedOpacityModifier =
-            if (keyboardOpacity < MAX_KEYBOARD_OPACITY) {
-                Modifier.graphicsLayer {
-                    alpha = (keyboardOpacity / 100f).coerceIn(MIN_KEYBOARD_OPACITY / 100f, 1f)
-                    compositingStrategy = CompositingStrategy.Offscreen
-                }
-            } else {
-                Modifier
-            }
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Box(
+    CompositionLocalProvider(LocalViewConfiguration provides keyboardViewConfiguration) {
+        if (floatingMode) {
+            Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .then(dockedOpacityModifier),
+                        .fillMaxSize()
+                        .safeDrawingPadding(),
             ) {
-                renderKeyboardContent(keyWidth, keyHeight, false)
+                FloatingKeyboardFrame(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    applySafeDrawingPadding = false,
+                    keyWidth = keyWidth,
+                    keyHeight = keyHeight,
+                    columns = getCurrentLayoutGridColumns(keyboardLayoutIndex),
+                    keyboardOpacity = keyboardOpacity,
+                    handlePosition = floatingHandlePosition,
+                    floatingXFraction = floatingXFraction,
+                    floatingYFraction = floatingYFraction,
+                    vibrateOnTap = vibrateOnTap,
+                    onMoved = onFloatingMoved,
+                    onBounds = onFloatingBounds,
+                    overlay = {
+                        if (effectiveSwipeTrailEnabled) {
+                            SwipeTrailOverlay(
+                                state = swipeTrailState,
+                                modifier = Modifier.matchParentSize(),
+                            )
+                        }
+                    },
+                ) { floatingKeyWidth, floatingKeyHeight ->
+                    renderKeyboardContent(floatingKeyWidth, floatingKeyHeight, true)
+                }
+                if (ctx.inlineSuggestionViews.isNotEmpty()) {
+                    DisposableEffect(Unit) {
+                        onDispose { ctx.onInlineSuggestionsBarBounds(null) }
+                    }
+                    InlineSuggestionsBar(
+                        suggestions = ctx.inlineSuggestionViews,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .onGloballyPositioned { coords ->
+                                    val pos = coords.positionInWindow()
+                                    ctx.onInlineSuggestionsBarBounds(
+                                        IntRect(
+                                            offset = IntOffset(pos.x.roundToInt(), pos.y.roundToInt()),
+                                            size = coords.size,
+                                        ),
+                                    )
+                                },
+                    )
+                }
             }
-            if (effectiveSwipeTrailEnabled) {
-                SwipeTrailOverlay(
-                    state = swipeTrailState,
-                    modifier = Modifier.matchParentSize(),
+        } else {
+            val dockedOpacityModifier =
+                if (keyboardOpacity < MAX_KEYBOARD_OPACITY) {
+                    Modifier.graphicsLayer {
+                        alpha = (keyboardOpacity / 100f).coerceIn(MIN_KEYBOARD_OPACITY / 100f, 1f)
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                } else {
+                    Modifier
+                }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                InlineSuggestionsBar(
+                    suggestions = ctx.inlineSuggestionViews,
+                    modifier = Modifier.fillMaxWidth(),
                 )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(dockedOpacityModifier),
+                    ) {
+                        renderKeyboardContent(keyWidth, keyHeight, false)
+                    }
+                    if (effectiveSwipeTrailEnabled) {
+                        SwipeTrailOverlay(
+                            state = swipeTrailState,
+                            modifier = Modifier.matchParentSize(),
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+private fun withContextualReturnIcon(
+    key: KeyItemC,
+    icon: ImageVector?,
+): KeyItemC =
+    if (icon != null && key.center.action == KeyAction.IMECompleteAction) {
+        key.copy(center = key.center.copy(display = KeyDisplay.IconDisplay(icon)))
+    } else {
+        key
+    }
+
+private class CustomLongPressViewConfiguration(
+    private val base: ViewConfiguration,
+    override val longPressTimeoutMillis: Long,
+) : ViewConfiguration by base {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is CustomLongPressViewConfiguration &&
+                    base == other.base &&
+                    longPressTimeoutMillis == other.longPressTimeoutMillis
+            )
+
+    override fun hashCode(): Int = 31 * base.hashCode() + longPressTimeoutMillis.hashCode()
 }

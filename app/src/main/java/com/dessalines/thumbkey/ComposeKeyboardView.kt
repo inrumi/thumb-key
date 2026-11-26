@@ -5,10 +5,14 @@ import android.content.Context
 import android.content.Intent
 import android.view.WindowInsets
 import android.widget.Toast
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -48,6 +52,12 @@ class ComposeKeyboardView(
         ThumbkeyTheme(
             settings = settings,
         ) {
+            val colorScheme = MaterialTheme.colorScheme
+            SideEffect {
+                ctx.inlineSuggestionTextColor = colorScheme.onSurface.toArgb()
+                ctx.inlineSuggestionSubtextColor = colorScheme.onSurfaceVariant.toArgb()
+                ctx.inlineSuggestionDarkTheme = colorScheme.surface.luminance() < 0.5f
+            }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 KeyboardScreen(
                     settings = settings,

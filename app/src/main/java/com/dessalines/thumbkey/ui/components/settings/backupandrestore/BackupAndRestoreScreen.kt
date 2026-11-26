@@ -40,6 +40,7 @@ import com.dessalines.thumbkey.db.DEFAULT_ANIMATION_SPEED
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_CAPITALIZE
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_SIZE_KEYS
 import com.dessalines.thumbkey.db.DEFAULT_BACKDROP_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_BACKSPACE_HOLD_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_CIRCULAR_DRAG_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLIPBOARD_AUTO_CLEANUP_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLIPBOARD_CLEANUP_AFTER_MINUTES
@@ -56,6 +57,8 @@ import com.dessalines.thumbkey.db.DEFAULT_FLOATING_Y_FRACTION
 import com.dessalines.thumbkey.db.DEFAULT_GHOST_KEYS_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_HIDE_LETTERS
 import com.dessalines.thumbkey.db.DEFAULT_HIDE_SYMBOLS
+import com.dessalines.thumbkey.db.DEFAULT_HOLD_DURATION_MS
+import com.dessalines.thumbkey.db.DEFAULT_HOLD_KEY_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_IGNORE_BOTTOM_PADDING
 import com.dessalines.thumbkey.db.DEFAULT_KEYBOARD_LAYOUT
 import com.dessalines.thumbkey.db.DEFAULT_KEYBOARD_OPACITY
@@ -69,6 +72,7 @@ import com.dessalines.thumbkey.db.DEFAULT_KEY_RADIUS
 import com.dessalines.thumbkey.db.DEFAULT_KEY_WIDTH
 import com.dessalines.thumbkey.db.DEFAULT_MIN_SWIPE_LENGTH
 import com.dessalines.thumbkey.db.DEFAULT_NON_SQUARE_KEYS
+import com.dessalines.thumbkey.db.DEFAULT_NUMERIC_LAYOUT_ORDER
 import com.dessalines.thumbkey.db.DEFAULT_POSITION
 import com.dessalines.thumbkey.db.DEFAULT_POSITION_PADDING
 import com.dessalines.thumbkey.db.DEFAULT_PUSHUP_SIZE
@@ -330,6 +334,10 @@ private fun resetAppSettingsToDefault(appSettingsViewModel: AppSettingsViewModel
             floatingYFraction = DEFAULT_FLOATING_Y_FRACTION,
             keyAnimationType = DEFAULT_KEY_ANIMATION_TYPE,
             swipeTrailEnabled = DEFAULT_SWIPE_TRAIL_ENABLED,
+            holdKeyAction = DEFAULT_HOLD_KEY_ACTION,
+            holdDurationMs = DEFAULT_HOLD_DURATION_MS,
+            numericLayoutOrder = DEFAULT_NUMERIC_LAYOUT_ORDER,
+            backspaceHoldAction = DEFAULT_BACKSPACE_HOLD_ACTION,
         ),
     )
 }

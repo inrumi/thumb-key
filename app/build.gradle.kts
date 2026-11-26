@@ -134,6 +134,9 @@ dependencies {
     implementation("com.louiscad.splitties:splitties-systemservices:3.0.0")
     implementation("com.louiscad.splitties:splitties-views:3.0.0")
 
+    // Inline Autofill suggestions
+    implementation("androidx.autofill:autofill:1.3.0")
+
     // Room
     // To use Kotlin annotation processing tool
     ksp("androidx.room:room-compiler:2.8.5")

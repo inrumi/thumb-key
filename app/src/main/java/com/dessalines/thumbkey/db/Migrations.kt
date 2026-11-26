@@ -350,3 +350,21 @@ val MIGRATION_30_31 =
             )
         }
     }
+
+val MIGRATION_31_32 =
+    object : Migration(31, 32) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN hold_key_action INTEGER NOT NULL DEFAULT $DEFAULT_HOLD_KEY_ACTION",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN hold_duration_ms INTEGER NOT NULL DEFAULT $DEFAULT_HOLD_DURATION_MS",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN numeric_layout_order INTEGER NOT NULL DEFAULT $DEFAULT_NUMERIC_LAYOUT_ORDER",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN backspace_hold_action INTEGER NOT NULL DEFAULT $DEFAULT_BACKSPACE_HOLD_ACTION",
+            )
+        }
+    }

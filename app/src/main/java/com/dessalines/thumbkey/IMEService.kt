@@ -1,20 +1,37 @@
 package com.dessalines.thumbkey
 
+import android.annotation.SuppressLint
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Region
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Icon
 import android.inputmethodservice.InputMethodService
+import android.os.Build
+import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InlineSuggestionsRequest
+import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputConnection
 import android.widget.LinearLayout
+import android.widget.inline.InlinePresentationSpec
+import androidx.annotation.ColorInt
+import androidx.autofill.inline.UiVersions
+import androidx.autofill.inline.common.TextViewStyle
+import androidx.autofill.inline.common.ViewStyle
+import androidx.autofill.inline.v1.InlineSuggestionUi
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntRect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -48,19 +65,34 @@ class IMEService :
     LifecycleOwner,
     ViewModelStoreOwner,
     SavedStateRegistryOwner {
-    private fun setupView(): ComposeKeyboardView {
+    private fun syncKeyboardDefinition() {
         val app = application as ThumbkeyApplication
-        val settingsRepo = app.appSettingsRepository
-        val clipboardRepo = app.clipboardRepository
-
-        val appSettings = settingsRepo.appSettings.value
+        val appSettings = app.appSettingsRepository.appSettings.value
         val layoutIndex = appSettings?.keyboardLayout
-        if (layoutIndex != null) {
+        if (currentKeyboardDefinition == null && layoutIndex != null) {
             currentKeyboardDefinition =
                 resolveKeyboardDefinition(KeyboardLayout.entries[layoutIndex], appSettings.keyModifications)
         }
+    }
 
-        val view = ComposeKeyboardView(this, settingsRepo, clipboardRepo)
+    private fun syncFloatingMode() {
+        val app = application as ThumbkeyApplication
+        isFloatingMode =
+            isFloatingPosition(
+                app.appSettingsRepository.appSettings.value
+                    ?.position,
+            )
+        if (!isFloatingMode) {
+            floatingPanelBounds = null
+            inlineSuggestionsBarBounds = null
+        }
+    }
+
+    private fun setupView(): ComposeKeyboardView {
+        val app = application as ThumbkeyApplication
+        syncKeyboardDefinition()
+
+        val view = ComposeKeyboardView(this, app.appSettingsRepository, app.clipboardRepository)
         window?.window?.decorView?.let { decorView ->
             decorView.setViewTreeLifecycleOwner(this)
             decorView.setViewTreeViewModelStoreOwner(this)
@@ -75,6 +107,30 @@ class IMEService :
     }
 
     var currentKeyboardDefinition: KeyboardDefinition? = null
+    var inputSessionVersion by mutableIntStateOf(0)
+        private set
+    var editorImeOptions by mutableIntStateOf(EditorInfo.IME_ACTION_NONE)
+        private set
+    val inlineSuggestionViews = mutableStateListOf<View>()
+    private var inlineSuggestionRequestToken: Long = 0L
+
+    @ColorInt
+    var inlineSuggestionTextColor: Int = Color.WHITE
+
+    @ColorInt
+    var inlineSuggestionSubtextColor: Int = Color.LTGRAY
+    var inlineSuggestionDarkTheme: Boolean = true
+
+    fun clearInlineSuggestions() {
+        inlineSuggestionRequestToken++
+        inlineSuggestionViews.clear()
+        if (inlineSuggestionsBarBounds != null) {
+            inlineSuggestionsBarBounds = null
+            if (isFloatingMode) window?.window?.decorView?.requestLayout()
+        }
+    }
+
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
     // While set, the keys type into this field of the keyboard's own, like sketch mode's
     // search, instead of the app's
@@ -97,6 +153,7 @@ class IMEService :
     private var clipboardManager: ThumbKeyClipboardManager? = null
     private var isFloatingMode: Boolean = false
     private var floatingPanelBounds: Rect? = null
+    private var inlineSuggestionsBarBounds: Rect? = null
     private var imeNavBarBottomPx: Int = 0
 
     private fun isFloatingPosition(position: Int?): Boolean = (position ?: DEFAULT_POSITION) == KeyboardPosition.Floating.ordinal
@@ -106,6 +163,14 @@ class IMEService :
         if (rect != floatingPanelBounds) {
             floatingPanelBounds = rect
             window?.window?.decorView?.requestLayout()
+        }
+    }
+
+    fun onInlineSuggestionsBarBounds(bounds: IntRect?) {
+        val rect = bounds?.let { Rect(it.left, it.top, it.right, it.bottom) }
+        if (rect != inlineSuggestionsBarBounds) {
+            inlineSuggestionsBarBounds = rect
+            if (isFloatingMode) window?.window?.decorView?.requestLayout()
         }
     }
 
@@ -170,9 +235,14 @@ class IMEService :
         }
     }
 
+    override fun onCreateInputView(): View {
+        val view = setupView()
+        window?.window?.let { applyFloatingWindowLayout(it) }
+        return view
+    }
+
     /**
-     * This is called every time the keyboard is brought up.
-     * You can't use onCreate, because that can't pick up new numeric inputs
+     * Called every time the keyboard is brought up or focus moves to an editor.
      */
     override fun onStartInput(
         attribute: EditorInfo?,
@@ -180,22 +250,97 @@ class IMEService :
     ) {
         super.onStartInput(attribute, restarting)
         setInputRedirect(null)
-        // A new keyboard opens on the letters: close sketch mode's search and lists, but keep
-        // its drawing
-        sketchState.searching = false
-        sketchState.list = null
-        val app = application as ThumbkeyApplication
-        isFloatingMode =
-            isFloatingPosition(
-                app.appSettingsRepository.appSettings.value
-                    ?.position,
-            )
-        if (!isFloatingMode) {
-            floatingPanelBounds = null
+        syncKeyboardDefinition()
+        syncFloatingMode()
+        editorImeOptions = attribute?.imeOptions ?: EditorInfo.IME_ACTION_NONE
+        if (!restarting) {
+            // A new keyboard opens on the letters: close sketch mode's search and lists, but keep
+            // its drawing
+            sketchState.searching = false
+            sketchState.list = null
+            clearInlineSuggestions()
+            inputSessionVersion++
         }
-        val view = this.setupView()
-        this.setInputView(view)
+    }
+
+    override fun onStartInputView(
+        info: EditorInfo?,
+        restarting: Boolean,
+    ) {
+        super.onStartInputView(info, restarting)
+        syncFloatingMode()
         window?.window?.let { applyFloatingWindowLayout(it) }
+    }
+
+    override fun onFinishInput() {
+        clearInlineSuggestions()
+        super.onFinishInput()
+    }
+
+    @SuppressLint("RestrictedApi")
+    override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        if (!UiVersions.getVersions(uiExtras).contains(UiVersions.INLINE_UI_VERSION_1)) return null
+        val maxChipWidthPx = (resources.displayMetrics.widthPixels - dpToPx(12)).coerceAtLeast(dpToPx(96))
+        val chipBgRes =
+            if (inlineSuggestionDarkTheme) {
+                R.drawable.autofill_chip_background_dark
+            } else {
+                R.drawable.autofill_chip_background_light
+            }
+        val styleBundle =
+            UiVersions
+                .newStylesBuilder()
+                .addStyle(
+                    InlineSuggestionUi
+                        .newStyleBuilder()
+                        .setTitleStyle(
+                            TextViewStyle
+                                .Builder()
+                                .setTextColor(inlineSuggestionTextColor)
+                                .setTextSize(13f)
+                                .build(),
+                        ).setSubtitleStyle(
+                            TextViewStyle
+                                .Builder()
+                                .setTextColor(inlineSuggestionSubtextColor)
+                                .setTextSize(11f)
+                                .build(),
+                        ).setChipStyle(
+                            ViewStyle
+                                .Builder()
+                                .setBackground(Icon.createWithResource(this, chipBgRes))
+                                .setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
+                                .build(),
+                        ).build(),
+                ).build()
+        val spec =
+            InlinePresentationSpec
+                .Builder(Size(dpToPx(48), dpToPx(36)), Size(maxChipWidthPx, dpToPx(44)))
+                .setStyle(styleBundle)
+                .build()
+        return InlineSuggestionsRequest
+            .Builder(listOf(spec))
+            .setMaxSuggestionCount(InlineSuggestionsRequest.SUGGESTION_COUNT_UNLIMITED)
+            .build()
+    }
+
+    override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val token = ++inlineSuggestionRequestToken
+        inlineSuggestionViews.clear()
+        val suggestions = response.inlineSuggestions
+        if (suggestions.isEmpty()) return true
+        val slots = MutableList<View?>(suggestions.size) { null }
+        suggestions.forEachIndexed { index, suggestion ->
+            suggestion.inflate(this, Size(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(44)), mainExecutor) { view ->
+                if (inlineSuggestionRequestToken != token) return@inflate
+                slots[index] = view
+                inlineSuggestionViews.clear()
+                inlineSuggestionViews.addAll(slots.filterNotNull())
+            }
+        }
+        return true
     }
 
     // Lifecycle Methods
@@ -222,6 +367,7 @@ class IMEService :
                 isFloatingMode = nextFloating
                 if (!nextFloating) {
                     floatingPanelBounds = null
+                    inlineSuggestionsBarBounds = null
                 }
                 window?.window?.let { applyFloatingWindowLayout(it) }
                 updateFullscreenMode()
@@ -269,6 +415,11 @@ class IMEService :
             outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
             outInsets.touchableRegion.setEmpty()
             outInsets.touchableRegion.set(bounds)
+            inlineSuggestionsBarBounds?.let { barBounds ->
+                if (!barBounds.isEmpty) {
+                    outInsets.touchableRegion.op(barBounds, Region.Op.UNION)
+                }
+            }
             if (band > 0) {
                 outInsets.touchableRegion.op(0, top, decorView.width, decorHeight, Region.Op.UNION)
             }
@@ -278,6 +429,7 @@ class IMEService :
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         floatingPanelBounds = null
+        inlineSuggestionsBarBounds = null
         window?.window?.let { applyFloatingWindowLayout(it) }
         window?.window?.decorView?.let { decorView ->
             decorView.requestApplyInsets()

@@ -183,4 +183,15 @@
     <string name="key_animation_from_origin">From key position</string>
     <string name="swipe_trail">Swipe trail</string>
     <string name="swipe_trail_summary">Show a trail while swiping across keys</string>
+    <string name="hold_key_action">Hold key action</string>
+    <string name="hold_key_action_none">Nothing</string>
+    <string name="hold_duration">Hold time: %1$s ms</string>
+    <string name="hold_duration_description">Time to hold a key before triggering hold actions</string>
+    <string name="numeric_layout_order">Number pad layout</string>
+    <string name="numeric_layout_order_default">Layout default</string>
+    <string name="numeric_layout_order_phone">Phone (1-2-3)</string>
+    <string name="numeric_layout_order_calculator">Calculator (7-8-9)</string>
+    <string name="backspace_hold_action">Backspace hold action</string>
+    <string name="backspace_hold_action_delete_word">Delete word</string>
+    <string name="backspace_hold_action_repeat_delete">Repeat delete</string>
 </resources>
