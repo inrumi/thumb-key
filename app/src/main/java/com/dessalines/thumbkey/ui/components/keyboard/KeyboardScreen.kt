@@ -106,7 +106,7 @@ import com.dessalines.thumbkey.utils.getCurrentLayoutGridColumns
 import com.dessalines.thumbkey.utils.getKeyboardMode
 import com.dessalines.thumbkey.utils.getModifiedKeyboardDefinition
 import com.dessalines.thumbkey.utils.isLeftHandedLayout
-import com.dessalines.thumbkey.utils.isPasswordField
+import com.dessalines.thumbkey.utils.isPasswordInputType
 import com.dessalines.thumbkey.utils.keyboardPositionToAlignment
 import com.dessalines.thumbkey.utils.resolveKeyboardDefinition
 import com.dessalines.thumbkey.utils.toBool
@@ -277,7 +277,7 @@ fun KeyboardScreen(
             settings?.keyAnimationType ?: DEFAULT_KEY_ANIMATION_TYPE,
         ) { KeyAnimationType.SlideFromTop }
     val swipeTrailEnabled = (settings?.swipeTrailEnabled ?: DEFAULT_SWIPE_TRAIL_ENABLED).toBool()
-    val isPassword = remember(ctx) { isPasswordField(ctx) }
+    val isPassword = isPasswordInputType(ctx.editorInputType)
     val effectiveSwipeTrailEnabled = swipeTrailEnabled && !isPassword
     val swipeTrailState = rememberSwipeTrailState()
 

@@ -72,7 +72,7 @@ import com.dessalines.thumbkey.utils.colorVariantToColor
 import com.dessalines.thumbkey.utils.deleteWordBeforeCursor
 import com.dessalines.thumbkey.utils.doneKeyAction
 import com.dessalines.thumbkey.utils.fontSizeVariantToFontSize
-import com.dessalines.thumbkey.utils.isPasswordField
+import com.dessalines.thumbkey.utils.isPasswordInputType
 import com.dessalines.thumbkey.utils.nextWordAfterCursor
 import com.dessalines.thumbkey.utils.performKeyAction
 import com.dessalines.thumbkey.utils.previousWordBeforeCursor
@@ -169,7 +169,7 @@ fun KeyboardKey(
     val scope = rememberCoroutineScope()
 
     // Don't show animations for password fields
-    val isPasswordField by remember { mutableStateOf(isPasswordField(ime)) }
+    val isPasswordField = isPasswordInputType(ime.editorInputType)
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
