@@ -330,7 +330,7 @@ val NEXT_WORD_AFTER_CURSOR_KEYC =
 val BACKSPACE_KEY_ITEM =
     KeyItemC(
         center = BACKSPACE_KEYC,
-        swipeType = TWO_WAY_HORIZONTAL,
+        swipeType = FOUR_WAY_CROSS,
         slideType = SlideType.DELETE,
         left = DELETE_WORD_BEFORE_CURSOR_KEYC,
         right = DELETE_WORD_AFTER_CURSOR_KEYC,
