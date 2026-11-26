@@ -3,6 +3,7 @@ package com.dessalines.thumbkey.textprocessors
 import android.view.KeyEvent
 import android.view.inputmethod.ExtractedTextRequest
 import com.dessalines.thumbkey.IMEService
+import com.dessalines.thumbkey.utils.sendDownUpKeyEvent
 
 class AvroTextProcessor : TextProcessor {
     private var buffer = ""
@@ -47,7 +48,7 @@ class AvroTextProcessor : TextProcessor {
             selectionEnd = selectionStart
             lastConvertedLen = converted.length
         } else {
-            ic.sendKeyEvent(ev)
+            sendDownUpKeyEvent(ic, ev)
         }
     }
 
