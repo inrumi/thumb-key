@@ -14,6 +14,7 @@ import com.dessalines.thumbkey.keyboards.BACKSPACE_TEXT_MANIPULATION_KEYC
 import com.dessalines.thumbkey.keyboards.COMPOSE_COMBO_KEYC
 import com.dessalines.thumbkey.keyboards.COPY_KEYC
 import com.dessalines.thumbkey.keyboards.CUT_KEYC
+import com.dessalines.thumbkey.keyboards.CYCLE_AUTOCORRECT_LANGUAGE_KEYC
 import com.dessalines.thumbkey.keyboards.DELETE_CHARACTER_AFTER_CURSOR_KEYC
 import com.dessalines.thumbkey.keyboards.DELETE_WORD_AFTER_CURSOR_KEYC
 import com.dessalines.thumbkey.keyboards.DELETE_WORD_BEFORE_CURSOR_KEYC
@@ -379,6 +380,7 @@ fun getCommonKeyCFromKeyAction(keyActionSerializable: KeyActionSerializable?): K
         KeyActionSerializable.DeleteWordBeforeCursor -> DELETE_WORD_BEFORE_CURSOR_KEYC
         KeyActionSerializable.DeleteWordAfterCursor -> DELETE_WORD_AFTER_CURSOR_KEYC
         KeyActionSerializable.SwitchLanguage -> SWITCH_LANGUAGE_KEYC
+        KeyActionSerializable.CycleAutocorrectLanguage -> CYCLE_AUTOCORRECT_LANGUAGE_KEYC
         KeyActionSerializable.SwitchIME -> SWITCH_IME_KEYC
         KeyActionSerializable.SwitchIMEVoice -> SWITCH_IME_VOICE_KEYC
         KeyActionSerializable.HideKeyboard -> HIDE_KEYBOARD_KEYC
@@ -577,6 +579,7 @@ enum class KeyActionSerializable {
     Undo,
     Redo,
     SwitchLanguage,
+    CycleAutocorrectLanguage,
     SwitchIME,
     SwitchIMEVoice,
     HideKeyboard,

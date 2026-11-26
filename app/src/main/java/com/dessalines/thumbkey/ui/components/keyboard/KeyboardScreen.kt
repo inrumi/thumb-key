@@ -50,10 +50,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.emoji2.emojipicker.EmojiPickerView
 import com.dessalines.thumbkey.IMEService
 import com.dessalines.thumbkey.R
+import com.dessalines.thumbkey.autocorrect.AutocorrectSession
+import com.dessalines.thumbkey.autocorrect.LayoutLanguageResolver
 import com.dessalines.thumbkey.db.AppSettings
 import com.dessalines.thumbkey.db.ClipboardRepository
 import com.dessalines.thumbkey.db.DEFAULT_ANIMATION_HELPER_SPEED
 import com.dessalines.thumbkey.db.DEFAULT_ANIMATION_SPEED
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_CAPITALIZE
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_SIZE_KEYS
 import com.dessalines.thumbkey.db.DEFAULT_BACKDROP_ENABLED
@@ -94,6 +99,8 @@ import com.dessalines.thumbkey.db.DEFAULT_SLIDE_SENSITIVITY
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_SPACEBAR_DEADZONE_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SOUND_ON_TAP
 import com.dessalines.thumbkey.db.DEFAULT_SPACEBAR_MULTITAPS
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTIONS_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT
 import com.dessalines.thumbkey.db.DEFAULT_SWIPE_TRAIL_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_TO_LETTERS_AFTER_SPACE
 import com.dessalines.thumbkey.db.DEFAULT_VIBRATE_ON_SLIDE
@@ -121,6 +128,7 @@ import com.dessalines.thumbkey.utils.KeyboardMode
 import com.dessalines.thumbkey.utils.KeyboardPosition
 import com.dessalines.thumbkey.utils.NumericLayoutOrder
 import com.dessalines.thumbkey.utils.SlideType
+import com.dessalines.thumbkey.utils.SuggestionBarFloatingPlacement
 import com.dessalines.thumbkey.utils.TAG
 import com.dessalines.thumbkey.utils.applyNumericLayoutOrder
 import com.dessalines.thumbkey.utils.findNumericKeyForCell
@@ -132,12 +140,14 @@ import com.dessalines.thumbkey.utils.getModifiedKeyboardDefinition
 import com.dessalines.thumbkey.utils.imeActionDisplayIcon
 import com.dessalines.thumbkey.utils.isLeftHandedLayout
 import com.dessalines.thumbkey.utils.isPasswordInputType
+import com.dessalines.thumbkey.utils.isUriOrEmailOrPasswordInputType
 import com.dessalines.thumbkey.utils.keyboardPositionToAlignment
 import com.dessalines.thumbkey.utils.resolveKeyboardDefinition
 import com.dessalines.thumbkey.utils.toBool
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.collections.sortedBy
 import kotlin.math.roundToInt
 import kotlin.time.TimeMark
@@ -147,6 +157,7 @@ fun KeyboardScreen(
     settings: AppSettings?,
     clipboardRepository: ClipboardRepository,
     onSwitchLanguage: () -> Unit,
+    onCycleAutocorrectLanguage: () -> Unit = {},
     onChangePosition: ((old: KeyboardPosition) -> KeyboardPosition) -> Unit,
     onToggleHideLetters: () -> Unit,
     onFloatingMoved: (xFraction: Float, yFraction: Float) -> Unit,
@@ -340,6 +351,42 @@ fun KeyboardScreen(
     val contextualReturnIcon = remember(imeActionCode) { imeActionDisplayIcon(imeActionCode) }
     val effectiveSwipeTrailEnabled = swipeTrailEnabled && !isPassword
     val swipeTrailState = rememberSwipeTrailState()
+
+    val autocorrectEnabled = (settings?.autocorrectEnabled ?: DEFAULT_AUTOCORRECT_ENABLED).toBool()
+    val suggestionsEnabled = (settings?.suggestionsEnabled ?: DEFAULT_SUGGESTIONS_ENABLED).toBool()
+    val floatingPlacement =
+        SuggestionBarFloatingPlacement.entries.getOrElse(
+            settings?.suggestionBarFloatingPlacement ?: DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT,
+        ) { SuggestionBarFloatingPlacement.AboveKeyboard }
+    val isRestrictedField =
+        remember(ctx.inputSessionVersion, ctx.editorInputType) {
+            ctx.currentInputEditorInfo != null && isUriOrEmailOrPasswordInputType(ctx.editorInputType)
+        }
+    val activeAutocorrectLang =
+        remember(layout, settings?.autocorrectAdditionalLanguages, settings?.autocorrectActiveLanguage) {
+            LayoutLanguageResolver.resolveActiveLanguage(
+                layout = layout,
+                additionalLanguagesCsv =
+                    settings?.autocorrectAdditionalLanguages ?: DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES,
+                activeLanguage = settings?.autocorrectActiveLanguage ?: DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE,
+            )
+        }
+    val spacebarLabel =
+        remember(activeAutocorrectLang, autocorrectEnabled, suggestionsEnabled) {
+            if (activeAutocorrectLang != null && (autocorrectEnabled || suggestionsEnabled)) {
+                LayoutLanguageResolver.displayNameForSpacebar(activeAutocorrectLang)
+            } else {
+                null
+            }
+        }
+    val spacebarShortLabel =
+        remember(activeAutocorrectLang, spacebarLabel) {
+            if (spacebarLabel != null && activeAutocorrectLang != null) {
+                activeAutocorrectLang.uppercase(Locale.ROOT)
+            } else {
+                null
+            }
+        }
 
     LaunchedEffect(effectiveSwipeTrailEnabled, mode) {
         if (
@@ -1237,6 +1284,7 @@ fun KeyboardScreen(
                                                 onSwitchLanguage()
                                                 mode = KeyboardMode.MAIN
                                             },
+                                            onCycleAutocorrectLanguage = onCycleAutocorrectLanguage,
                                             onChangePosition = onChangePosition,
                                             oppositeCaseKey =
                                                 when (mode) {
@@ -1266,6 +1314,8 @@ fun KeyboardScreen(
                                             slideHoldEnabled = slideHoldEnabled,
                                             holdKeyAction = holdKeyAction,
                                             backspaceHoldAction = backspaceHoldAction,
+                                            spacebarLabel = spacebarLabel,
+                                            spacebarShortLabel = spacebarShortLabel,
                                         )
                                     }
                                 }
@@ -1316,6 +1366,34 @@ fun KeyboardScreen(
         }
     }
 
+    val showSuggestionBar =
+        shouldShowSuggestionBar(
+            inlineSuggestionViewsCount = ctx.inlineSuggestionViews.size,
+            suggestionsEnabled = suggestionsEnabled,
+            isRestrictedField = isRestrictedField,
+            isPanelOpen = mode == KeyboardMode.EMOJI || mode == KeyboardMode.CLIPBOARD || sketch.searching,
+            hasActiveLanguages = activeAutocorrectLang != null,
+        )
+    val suggestionStripState = ctx.autocorrectSession?.stripState ?: AutocorrectSession.SuggestionStripState()
+    val suggestionBarContent = @Composable { barModifier: Modifier, dividerAtBottom: Boolean ->
+        SuggestionBar(
+            stripState = suggestionStripState,
+            inlineSuggestionViews = ctx.inlineSuggestionViews,
+            vibrateOnTap = vibrateOnTap,
+            onUndoClick = { ctx.autocorrectSession?.applyUndoChip(ctx) },
+            onSuggestionClick = { suggestion ->
+                ctx.autocorrectSession?.applySuggestion(ctx, suggestion) {
+                    if (!capsLock && mode == KeyboardMode.SHIFTED) {
+                        mode = KeyboardMode.MAIN
+                    }
+                }
+            },
+            onEmojiClick = { emoji -> ctx.autocorrectSession?.applyEmojiSuggestion(ctx, emoji) },
+            modifier = barModifier,
+            dividerAtBottom = dividerAtBottom,
+        )
+    }
+
     CompositionLocalProvider(LocalViewConfiguration provides keyboardViewConfiguration) {
         if (floatingMode) {
             Column(
@@ -1340,6 +1418,18 @@ fun KeyboardScreen(
                     vibrateOnTap = vibrateOnTap,
                     onMoved = onFloatingMoved,
                     onBounds = onFloatingBounds,
+                    topBar =
+                        if (showSuggestionBar && floatingPlacement == SuggestionBarFloatingPlacement.AboveKeyboard) {
+                            { suggestionBarContent(Modifier.fillMaxWidth(), true) }
+                        } else {
+                            null
+                        },
+                    bottomBar =
+                        if (showSuggestionBar && floatingPlacement == SuggestionBarFloatingPlacement.BelowKeyboard) {
+                            { suggestionBarContent(Modifier.fillMaxWidth(), false) }
+                        } else {
+                            null
+                        },
                     overlay = {
                         if (effectiveSwipeTrailEnabled) {
                             SwipeTrailOverlay(
@@ -1355,24 +1445,23 @@ fun KeyboardScreen(
                 ) { floatingKeyWidth, floatingKeyHeight ->
                     renderKeyboardContent(floatingKeyWidth, floatingKeyHeight, true)
                 }
-                if (ctx.inlineSuggestionViews.isNotEmpty()) {
+                if (showSuggestionBar && floatingPlacement == SuggestionBarFloatingPlacement.DockedBottom) {
                     DisposableEffect(Unit) {
-                        onDispose { ctx.onInlineSuggestionsBarBounds(null) }
+                        onDispose { ctx.onDockedBarBounds(null) }
                     }
-                    InlineSuggestionsBar(
-                        suggestions = ctx.inlineSuggestionViews,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .onGloballyPositioned { coords ->
-                                    val pos = coords.positionInWindow()
-                                    ctx.onInlineSuggestionsBarBounds(
-                                        IntRect(
-                                            offset = IntOffset(pos.x.roundToInt(), pos.y.roundToInt()),
-                                            size = coords.size,
-                                        ),
-                                    )
-                                },
+                    suggestionBarContent(
+                        Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coords ->
+                                val pos = coords.positionInWindow()
+                                ctx.onDockedBarBounds(
+                                    IntRect(
+                                        offset = IntOffset(pos.x.roundToInt(), pos.y.roundToInt()),
+                                        size = coords.size,
+                                    ),
+                                )
+                            },
+                        false,
                     )
                 }
             }
@@ -1387,10 +1476,9 @@ fun KeyboardScreen(
                     Modifier
                 }
             Column(modifier = Modifier.fillMaxWidth()) {
-                InlineSuggestionsBar(
-                    suggestions = ctx.inlineSuggestionViews,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (showSuggestionBar) {
+                    suggestionBarContent(Modifier.fillMaxWidth(), true)
+                }
                 Box(
                     modifier =
                         Modifier

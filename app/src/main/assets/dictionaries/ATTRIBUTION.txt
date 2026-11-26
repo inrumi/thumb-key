@@ -1,0 +1,23 @@
+Bundled Dictionary, Language Model, and Emoji Assets Attribution
+
+- `en.wmdict` (merged English frequency wordlist):
+  - Derived from `wmkeyboard` (`en.txt` OpenSubtitles-scaled frequency list, MIT License, Copyright (c) 2026 Wasi Master)
+    and Android Open Source Project (AOSP) LatinIME `en_US_wordlist.combined` (`en_aosp.txt`, Apache License 2.0,
+    Copyright (C) The Android Open Source Project).
+- `en_caps.txt`:
+  - From AOSP LatinIME `en_US_wordlist.combined` via `wmkeyboard`, Apache License 2.0,
+    Copyright (C) The Android Open Source Project.
+- `en_bigrams.txt`:
+  - From `wmkeyboard` seed bigram table, MIT License, Copyright (c) 2026 Wasi Master.
+- `en_context.wmlm`:
+  - Offline int8 neural context language model from `wmkeyboard-data` (`data/en/en_context.wmlm`),
+    MIT License, Copyright (c) 2026 Wasi Master.
+- `es.wmdict` & `es_caps.txt`:
+  - Derived from AOSP LatinIME `es_wordlist.combined` via `wmkeyboard-data` (`data/es/es_aosp.txt.gz`),
+    Apache License 2.0, Copyright (C) The Android Open Source Project.
+- `es_bigrams.txt`:
+  - Derived from `wmkeyboard-data` (`data/es/es_bigrams.txt.gz`),
+    Apache License 2.0 / MIT License.
+- `emoji/triggers.tsv` & `emoji/shortcodes.tsv`:
+  - Derived from GitHub `gemoji` word-to-emoji trigger and shortcode tables via `wmkeyboard`,
+    MIT License.

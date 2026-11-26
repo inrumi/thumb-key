@@ -45,10 +45,15 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.dessalines.thumbkey.autocorrect.AutocorrectSession
+import com.dessalines.thumbkey.db.AppSettings
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLIPBOARD_HISTORY_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_DISABLE_FULLSCREEN_EDITOR
 import com.dessalines.thumbkey.db.DEFAULT_POSITION
 import com.dessalines.thumbkey.db.DEFAULT_SHOW_ON_SCREEN_KEYBOARD
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTIONS_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_IME_MODE
 import com.dessalines.thumbkey.db.DEFAULT_USE_PRIVATE_CLIPBOARD
 import com.dessalines.thumbkey.ui.components.keyboard.CaretMagnifierController
@@ -87,7 +92,7 @@ class IMEService :
             )
         if (!isFloatingMode) {
             floatingPanelBounds = null
-            inlineSuggestionsBarBounds = null
+            dockedBarBounds = null
         }
     }
 
@@ -127,16 +132,23 @@ class IMEService :
     fun clearInlineSuggestions() {
         inlineSuggestionRequestToken++
         inlineSuggestionViews.clear()
-        if (inlineSuggestionsBarBounds != null) {
-            inlineSuggestionsBarBounds = null
-            if (isFloatingMode) window?.window?.decorView?.requestLayout()
-        }
     }
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    var editorInputType by mutableIntStateOf(0)
+    var editorInputType by mutableIntStateOf(EditorInfo.TYPE_NULL)
         private set
+    var autocorrectSession: AutocorrectSession? = null
+        private set
+
+    val currentAppSettings: AppSettings?
+        get() = (application as ThumbkeyApplication).appSettingsRepository.appSettings.value
+
+    val currentKeyboardLayout: KeyboardLayout
+        get() {
+            val layoutIndex = currentAppSettings?.keyboardLayout ?: return KeyboardLayout.ENThumbKey
+            return KeyboardLayout.entries.getOrElse(layoutIndex) { KeyboardLayout.ENThumbKey }
+        }
 
     // While set, the keys type into this field of the keyboard's own, like sketch mode's
     // search, instead of the app's
@@ -183,7 +195,7 @@ class IMEService :
     private var clipboardManager: ThumbKeyClipboardManager? = null
     private var isFloatingMode: Boolean = false
     private var floatingPanelBounds: Rect? = null
-    private var inlineSuggestionsBarBounds: Rect? = null
+    private var dockedBarBounds: Rect? = null
     private var imeNavBarBottomPx: Int = 0
 
     private fun isFloatingPosition(position: Int?): Boolean = (position ?: DEFAULT_POSITION) == KeyboardPosition.Floating.ordinal
@@ -196,10 +208,10 @@ class IMEService :
         }
     }
 
-    fun onInlineSuggestionsBarBounds(bounds: IntRect?) {
+    fun onDockedBarBounds(bounds: IntRect?) {
         val rect = bounds?.let { Rect(it.left, it.top, it.right, it.bottom) }
-        if (rect != inlineSuggestionsBarBounds) {
-            inlineSuggestionsBarBounds = rect
+        if (rect != dockedBarBounds) {
+            dockedBarBounds = rect
             if (isFloatingMode) window?.window?.decorView?.requestLayout()
         }
     }
@@ -279,20 +291,26 @@ class IMEService :
         restarting: Boolean,
     ) {
         super.onStartInput(attribute, restarting)
-        editorInputType = attribute?.inputType ?: EditorInfo.TYPE_NULL
+        val nextInputType = attribute?.inputType ?: EditorInfo.TYPE_NULL
+        val nextImeOptions = attribute?.imeOptions ?: EditorInfo.IME_ACTION_NONE
+        val editorChanged = nextInputType != editorInputType || nextImeOptions != editorImeOptions
+        editorInputType = nextInputType
+        editorImeOptions = nextImeOptions
         lastReportedSelStart = -1
         lastReportedSelEnd = -1
         caretMagnifier.stop()
         setInputRedirect(null)
         syncKeyboardDefinition()
         syncFloatingMode()
-        editorImeOptions = attribute?.imeOptions ?: EditorInfo.IME_ACTION_NONE
+        autocorrectSession?.onStartInput(attribute, this)
         if (!restarting) {
             // A new keyboard opens on the letters: close sketch mode's search and lists, but keep
             // its drawing
             sketchState.searching = false
             sketchState.list = null
             clearInlineSuggestions()
+            inputSessionVersion++
+        } else if (editorChanged) {
             inputSessionVersion++
         }
     }
@@ -302,13 +320,31 @@ class IMEService :
         restarting: Boolean,
     ) {
         super.onStartInputView(info, restarting)
+        if (info != null) {
+            editorInputType = info.inputType
+            editorImeOptions = info.imeOptions
+        }
         syncFloatingMode()
         window?.window?.let { applyFloatingWindowLayout(it) }
+        syncContextModelLoading((application as ThumbkeyApplication).appSettingsRepository.appSettings.value)
+        autocorrectSession?.refreshSuggestions(this)
+    }
+
+    private fun syncContextModelLoading(settings: AppSettings?) {
+        val app = application as ThumbkeyApplication
+        val shouldLoadLm =
+            (settings?.autocorrectContextModelEnabled ?: DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED).toBool() &&
+                (
+                    (settings?.autocorrectEnabled ?: DEFAULT_AUTOCORRECT_ENABLED).toBool() ||
+                        (settings?.suggestionsEnabled ?: DEFAULT_SUGGESTIONS_ENABLED).toBool()
+                )
+        app.dictionaryManager.ensureContextModelLoadedAsync(shouldLoadLm)
     }
 
     override fun onFinishInput() {
         clearInlineSuggestions()
         caretMagnifier.stop()
+        autocorrectSession?.onFinishInput(currentInputEditorInfo)
         super.onFinishInput()
     }
 
@@ -397,12 +433,13 @@ class IMEService :
                     ?.position,
             )
         app.appSettingsRepository.appSettings.observe(this) { settings ->
+            syncContextModelLoading(settings)
             val nextFloating = isFloatingPosition(settings?.position)
             if (nextFloating != isFloatingMode) {
                 isFloatingMode = nextFloating
                 if (!nextFloating) {
                     floatingPanelBounds = null
-                    inlineSuggestionsBarBounds = null
+                    dockedBarBounds = null
                 }
                 window?.window?.let { applyFloatingWindowLayout(it) }
                 updateFullscreenMode()
@@ -417,6 +454,9 @@ class IMEService :
         clipboardManager = ThumbKeyClipboardManager(this, app.clipboardRepository)
         clipboardManager?.startListening()
         clipboardManager?.clearExpired()
+
+        app.dictionaryManager.ensureInitializedAsync()
+        autocorrectSession = AutocorrectSession(app.dictionaryManager)
     }
 
     override fun onConfigureWindow(
@@ -442,21 +482,26 @@ class IMEService :
         val decorHeight = decorView.height
         if (decorHeight <= 0) return
         val band = imeNavBarBottomPx.coerceIn(0, decorHeight)
-        val top = decorHeight - band
-        outInsets.contentTopInsets = top
-        outInsets.visibleTopInsets = top
+        val navTop = decorHeight - band
+        val barBounds = dockedBarBounds
+        val contentTop =
+            if (barBounds != null && !barBounds.isEmpty && barBounds.top in 1 until navTop) {
+                barBounds.top
+            } else {
+                navTop
+            }
+        outInsets.contentTopInsets = contentTop
+        outInsets.visibleTopInsets = contentTop
         val bounds = floatingPanelBounds
         if (bounds != null) {
             outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
             outInsets.touchableRegion.setEmpty()
             outInsets.touchableRegion.set(bounds)
-            inlineSuggestionsBarBounds?.let { barBounds ->
-                if (!barBounds.isEmpty) {
-                    outInsets.touchableRegion.op(barBounds, Region.Op.UNION)
-                }
+            if (barBounds != null && !barBounds.isEmpty) {
+                outInsets.touchableRegion.op(barBounds, Region.Op.UNION)
             }
             if (band > 0) {
-                outInsets.touchableRegion.op(0, top, decorView.width, decorHeight, Region.Op.UNION)
+                outInsets.touchableRegion.op(0, navTop, decorView.width, decorHeight, Region.Op.UNION)
             }
         }
     }
@@ -464,7 +509,7 @@ class IMEService :
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         floatingPanelBounds = null
-        inlineSuggestionsBarBounds = null
+        dockedBarBounds = null
         window?.window?.let { applyFloatingWindowLayout(it) }
         window?.window?.decorView?.let { decorView ->
             decorView.requestApplyInsets()
@@ -474,6 +519,7 @@ class IMEService :
 
     override fun onDestroy() {
         caretMagnifier.stop()
+        autocorrectSession?.close()
         clipboardManager?.stopListening()
         clipboardManager = null
         super.onDestroy()
@@ -499,6 +545,7 @@ class IMEService :
         lastReportedSelStart = newSelStart
         lastReportedSelEnd = newSelEnd
         caretMagnifier.onSelection(newSelStart, newSelEnd)
+        autocorrectSession?.onCursorUpdated(oldSelStart, oldSelEnd, newSelStart, newSelEnd, this)
     }
 
     // Cursor update Methods
@@ -522,6 +569,13 @@ class IMEService :
             selectionEnd,
             cursorAnchorInfo.selectionStart,
             cursorAnchorInfo.selectionEnd,
+        )
+        autocorrectSession?.onCursorUpdated(
+            selectionStart,
+            selectionEnd,
+            cursorAnchorInfo.selectionStart,
+            cursorAnchorInfo.selectionEnd,
+            this,
         )
 
         selectionStart = cursorAnchorInfo.selectionStart
@@ -564,6 +618,7 @@ class IMEService :
         // Running after it would let the processor write its pending text a second time.
         caretMagnifier.stop()
         currentKeyboardDefinition?.settings?.textProcessor?.handleFinishInput(this)
+        autocorrectSession?.onFinishInput(currentInputEditorInfo)
         super.onFinishInputView(finishingInput)
     }
 

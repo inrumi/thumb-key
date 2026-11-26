@@ -150,6 +150,8 @@ fun FloatingKeyboardFrame(
     onBounds: (IntRect) -> Unit,
     modifier: Modifier = Modifier.fillMaxSize(),
     applySafeDrawingPadding: Boolean = true,
+    topBar: (@Composable () -> Unit)? = null,
+    bottomBar: (@Composable () -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable (keyWidth: Float, keyHeight: Float) -> Unit,
 ) {
@@ -482,6 +484,13 @@ fun FloatingKeyboardFrame(
                 } else {
                     Modifier
                 }
+
+            if (topBar != null) {
+                Box(modifier = bodyOpacityModifier) {
+                    topBar()
+                }
+            }
+
             Box(
                 modifier =
                     Modifier
@@ -500,6 +509,12 @@ fun FloatingKeyboardFrame(
                     content(effectiveKeyWidth, effectiveKeyHeight)
                 }
                 overlay()
+            }
+
+            if (bottomBar != null) {
+                Box(modifier = bodyOpacityModifier) {
+                    bottomBar()
+                }
             }
 
             if (handlePosition == FloatingHandlePosition.Bottom) {

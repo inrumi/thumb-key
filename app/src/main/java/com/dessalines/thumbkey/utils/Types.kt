@@ -329,6 +329,8 @@ sealed class KeyAction {
 
     data object SwitchLanguage : KeyAction()
 
+    data object CycleAutocorrectLanguage : KeyAction()
+
     data object SwitchIME : KeyAction()
 
     data object SwitchIMEVoice : KeyAction()
@@ -531,4 +533,12 @@ enum class BackspaceHoldAction(
     DeleteWord(R.string.backspace_hold_action_delete_word),
     RepeatDelete(R.string.backspace_hold_action_repeat_delete),
     None(R.string.hold_key_action_none),
+}
+
+enum class SuggestionBarFloatingPlacement(
+    @param:StringRes val resId: Int,
+) {
+    AboveKeyboard(R.string.suggestion_bar_placement_above),
+    BelowKeyboard(R.string.suggestion_bar_placement_below),
+    DockedBottom(R.string.suggestion_bar_placement_docked_bottom),
 }

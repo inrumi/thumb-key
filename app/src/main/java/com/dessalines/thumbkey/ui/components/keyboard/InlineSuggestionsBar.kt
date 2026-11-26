@@ -180,23 +180,35 @@ private class InlineSuggestionsStripView(
 }
 
 @Composable
-fun InlineSuggestionsBar(
+fun InlineSuggestionsStripContent(
     suggestions: List<View>,
     modifier: Modifier = Modifier,
 ) {
     if (suggestions.isEmpty()) return
     val snapshot = suggestions.toList()
+    AndroidView(
+        modifier = modifier,
+        factory = ::InlineSuggestionsStripView,
+        update = { it.setSuggestions(snapshot) },
+        onRelease = { it.clearSuggestions() },
+    )
+}
+
+@Composable
+fun InlineSuggestionsBar(
+    suggestions: List<View>,
+    modifier: Modifier = Modifier,
+) {
+    if (suggestions.isEmpty()) return
     Box(
         modifier =
             modifier
                 .height(48.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)),
     ) {
-        AndroidView(
+        InlineSuggestionsStripContent(
+            suggestions = suggestions,
             modifier = Modifier.fillMaxSize(),
-            factory = ::InlineSuggestionsStripView,
-            update = { it.setSuggestions(snapshot) },
-            onRelease = { it.clearSuggestions() },
         )
     }
 }

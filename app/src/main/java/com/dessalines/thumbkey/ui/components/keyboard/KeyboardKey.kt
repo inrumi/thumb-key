@@ -52,9 +52,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import com.dessalines.thumbkey.IMEService
 import com.dessalines.thumbkey.utils.BackspaceHoldAction
 import com.dessalines.thumbkey.utils.CircularDirection
@@ -161,6 +163,7 @@ fun KeyboardKey(
     onToggleHideLetters: () -> Unit,
     onAutoCapitalize: (enable: Boolean) -> Unit,
     onSwitchLanguage: () -> Unit,
+    onCycleAutocorrectLanguage: () -> Unit = {},
     onChangePosition: ((old: KeyboardPosition) -> KeyboardPosition) -> Unit,
     onKeyEvent: (action: KeyAction) -> Unit,
     oppositeCaseKey: KeyItemC? = null,
@@ -172,6 +175,8 @@ fun KeyboardKey(
     slideHoldEnabled: Boolean,
     holdKeyAction: HoldKeyAction = HoldKeyAction.None,
     backspaceHoldAction: BackspaceHoldAction = BackspaceHoldAction.DeleteWord,
+    spacebarLabel: String? = null,
+    spacebarShortLabel: String? = null,
     onSketchAction: (action: KeyAction.Sketch) -> Unit = {},
 ) {
     val ctx = LocalContext.current
@@ -191,6 +196,9 @@ fun KeyboardKey(
 
     val isDragged = remember { mutableStateOf(false) }
     val releasedFeedback = remember { mutableStateOf<ReleasedKeyFeedback?>(null) }
+    LaunchedEffect(isPasswordField) {
+        if (isPasswordField) releasedFeedback.value = null
+    }
     var activeDragDirection by remember { mutableStateOf<SwipeDirection?>(null) }
     var activeDragReturn by remember { mutableStateOf(false) }
 
@@ -460,6 +468,7 @@ fun KeyboardKey(
             onToggleHideLetters = onToggleHideLetters,
             onAutoCapitalize = onAutoCapitalize,
             onSwitchLanguage = onSwitchLanguage,
+            onCycleAutocorrectLanguage = onCycleAutocorrectLanguage,
             onChangePosition = onChangePosition,
             onKeyEvent = onKeyEvent,
             onSketchAction = onSketchAction,
@@ -525,6 +534,7 @@ fun KeyboardKey(
                                                 HOLD_REPEAT_FAST_TICK_DELAY_MS
                                             }
                                         delay(delayMs)
+                                        ime.autocorrectSession?.clearUndoState()
                                         currentDispatchKeyAction(action)
                                         tick++
                                         if (currentVibrateOnTap) {
@@ -991,7 +1001,33 @@ fun KeyboardKey(
                 Modifier
                     .fillMaxSize(),
         ) {
-            KeyText(key.center, (keySize - keyBorderWidth).dp, hideLetters, hideSymbols, capsLock)
+            val isBlankSpacebar =
+                key.slideType == SlideType.MOVE_CURSOR &&
+                    (
+                        key.center.display == null ||
+                            (key.center.display as? KeyDisplay.TextDisplay)?.text?.isBlank() == true
+                    )
+            val resolvedSpacebarText =
+                if (key.widthMultiplier <= 1 && !spacebarShortLabel.isNullOrEmpty()) {
+                    spacebarShortLabel
+                } else {
+                    spacebarLabel
+                }
+            if (isBlankSpacebar && !resolvedSpacebarText.isNullOrEmpty()) {
+                val labelFontSize = (keyHeight * 0.21f).coerceIn(10f, 13f).sp
+                Text(
+                    text = resolvedSpacebarText,
+                    fontSize = labelFontSize,
+                    lineHeight = labelFontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = colorVariantToColor(ColorVariant.MUTED).copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+            } else {
+                KeyText(key.center, (keySize - keyBorderWidth).dp, hideLetters, hideSymbols, capsLock)
+            }
         }
 
         if (!isPasswordField) {

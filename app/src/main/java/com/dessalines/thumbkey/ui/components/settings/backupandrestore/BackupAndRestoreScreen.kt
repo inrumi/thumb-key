@@ -37,8 +37,21 @@ import com.dessalines.thumbkey.db.AppSettings
 import com.dessalines.thumbkey.db.AppSettingsViewModel
 import com.dessalines.thumbkey.db.DEFAULT_ANIMATION_HELPER_SPEED
 import com.dessalines.thumbkey.db.DEFAULT_ANIMATION_SPEED
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_BEFORE_ENTER
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_BEFORE_PUNCTUATION
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_CONFIDENCE
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_DICTIONARY_CAPITALS
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_FIX_APOSTROPHES
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_LEARN_WORDS
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_SKIP_ALL_CAPS
+import com.dessalines.thumbkey.db.DEFAULT_AUTOCORRECT_UNDO_ON_BACKSPACE
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_CAPITALIZE
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_SIZE_KEYS
+import com.dessalines.thumbkey.db.DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION
 import com.dessalines.thumbkey.db.DEFAULT_BACKDROP_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_BACKSPACE_HOLD_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_CIRCULAR_DRAG_ENABLED
@@ -76,6 +89,7 @@ import com.dessalines.thumbkey.db.DEFAULT_NUMERIC_LAYOUT_ORDER
 import com.dessalines.thumbkey.db.DEFAULT_POSITION
 import com.dessalines.thumbkey.db.DEFAULT_POSITION_PADDING
 import com.dessalines.thumbkey.db.DEFAULT_PUSHUP_SIZE
+import com.dessalines.thumbkey.db.DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION
 import com.dessalines.thumbkey.db.DEFAULT_SHOW_ON_SCREEN_KEYBOARD
 import com.dessalines.thumbkey.db.DEFAULT_SHOW_TOAST_ON_LAYOUT_SWITCH
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_BACKSPACE_DEADZONE_ENABLED
@@ -86,6 +100,9 @@ import com.dessalines.thumbkey.db.DEFAULT_SLIDE_SENSITIVITY
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_SPACEBAR_DEADZONE_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SOUND_ON_TAP
 import com.dessalines.thumbkey.db.DEFAULT_SPACEBAR_MULTITAPS
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTIONS_EMOJI_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTIONS_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT
 import com.dessalines.thumbkey.db.DEFAULT_SWIPE_TRAIL_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_IME_MODE
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_TO_LETTERS_AFTER_SPACE
@@ -332,6 +349,23 @@ private fun resetAppSettingsToDefault(appSettingsViewModel: AppSettingsViewModel
             holdDurationMs = DEFAULT_HOLD_DURATION_MS,
             numericLayoutOrder = DEFAULT_NUMERIC_LAYOUT_ORDER,
             backspaceHoldAction = DEFAULT_BACKSPACE_HOLD_ACTION,
+            autocorrectEnabled = DEFAULT_AUTOCORRECT_ENABLED,
+            autocorrectConfidence = DEFAULT_AUTOCORRECT_CONFIDENCE,
+            autocorrectUndoOnBackspace = DEFAULT_AUTOCORRECT_UNDO_ON_BACKSPACE,
+            autocorrectBeforePunctuation = DEFAULT_AUTOCORRECT_BEFORE_PUNCTUATION,
+            autocorrectBeforeEnter = DEFAULT_AUTOCORRECT_BEFORE_ENTER,
+            autocorrectFixApostrophes = DEFAULT_AUTOCORRECT_FIX_APOSTROPHES,
+            autocorrectDictionaryCapitals = DEFAULT_AUTOCORRECT_DICTIONARY_CAPITALS,
+            autocorrectSkipAllCaps = DEFAULT_AUTOCORRECT_SKIP_ALL_CAPS,
+            autocorrectLearnWords = DEFAULT_AUTOCORRECT_LEARN_WORDS,
+            autoSpaceAfterPunctuation = DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION,
+            removeSpaceBeforePunctuation = DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION,
+            suggestionsEnabled = DEFAULT_SUGGESTIONS_ENABLED,
+            suggestionBarFloatingPlacement = DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT,
+            suggestionsEmojiEnabled = DEFAULT_SUGGESTIONS_EMOJI_ENABLED,
+            autocorrectContextModelEnabled = DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED,
+            autocorrectAdditionalLanguages = DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES,
+            autocorrectActiveLanguage = DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE,
         ),
     )
 }

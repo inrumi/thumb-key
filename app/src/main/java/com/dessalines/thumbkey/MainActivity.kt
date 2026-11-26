@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dessalines.thumbkey.autocorrect.DictionaryManager
 import com.dessalines.thumbkey.db.AppDB
 import com.dessalines.thumbkey.db.AppSettingsRepository
 import com.dessalines.thumbkey.db.AppSettingsViewModel
@@ -26,6 +27,7 @@ import com.dessalines.thumbkey.db.ClipboardRepository
 import com.dessalines.thumbkey.ui.components.common.ShowChangelog
 import com.dessalines.thumbkey.ui.components.settings.SettingsScreen
 import com.dessalines.thumbkey.ui.components.settings.about.AboutScreen
+import com.dessalines.thumbkey.ui.components.settings.autocorrect.AutocorrectScreen
 import com.dessalines.thumbkey.ui.components.settings.backupandrestore.BackupAndRestoreScreen
 import com.dessalines.thumbkey.ui.components.settings.behavior.BehaviorScreen
 import com.dessalines.thumbkey.ui.components.settings.clipboard.ClipboardSettingsScreen
@@ -49,6 +51,7 @@ class ThumbkeyApplication : Application() {
             database.appSettingsDao(),
         )
     }
+    val dictionaryManager by lazy { DictionaryManager(this) }
 }
 
 class MainActivity : AppCompatActivity() {
@@ -148,6 +151,12 @@ class MainActivity : AppCompatActivity() {
                     }
                     composable(route = "behavior") {
                         BehaviorScreen(
+                            navController = navController,
+                            appSettingsViewModel = appSettingsViewModel,
+                        )
+                    }
+                    composable(route = "autocorrectSettings") {
+                        AutocorrectScreen(
                             navController = navController,
                             appSettingsViewModel = appSettingsViewModel,
                         )

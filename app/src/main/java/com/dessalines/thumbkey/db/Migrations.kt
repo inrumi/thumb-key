@@ -368,3 +368,60 @@ val MIGRATION_31_32 =
             )
         }
     }
+
+val MIGRATION_32_33 =
+    object : Migration(32, 33) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_enabled INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_ENABLED",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_confidence INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_CONFIDENCE",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_undo_on_backspace INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_UNDO_ON_BACKSPACE",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_before_punctuation INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_BEFORE_PUNCTUATION",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_before_enter INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_BEFORE_ENTER",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_fix_apostrophes INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_FIX_APOSTROPHES",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_dictionary_capitals INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_DICTIONARY_CAPITALS",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_skip_all_caps INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_SKIP_ALL_CAPS",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_learn_words INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_LEARN_WORDS",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN auto_space_after_punctuation INTEGER NOT NULL DEFAULT $DEFAULT_AUTO_SPACE_AFTER_PUNCTUATION",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN remove_space_before_punctuation INTEGER NOT NULL DEFAULT $DEFAULT_REMOVE_SPACE_BEFORE_PUNCTUATION",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN suggestions_enabled INTEGER NOT NULL DEFAULT $DEFAULT_SUGGESTIONS_ENABLED",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN suggestion_bar_floating_placement INTEGER NOT NULL DEFAULT $DEFAULT_SUGGESTION_BAR_FLOATING_PLACEMENT",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN suggestions_emoji_enabled INTEGER NOT NULL DEFAULT $DEFAULT_SUGGESTIONS_EMOJI_ENABLED",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_context_model_enabled INTEGER NOT NULL DEFAULT $DEFAULT_AUTOCORRECT_CONTEXT_MODEL_ENABLED",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_additional_languages TEXT NOT NULL DEFAULT '$DEFAULT_AUTOCORRECT_ADDITIONAL_LANGUAGES'",
+            )
+            db.execSQL(
+                "ALTER TABLE AppSettings ADD COLUMN autocorrect_active_language TEXT NOT NULL DEFAULT '$DEFAULT_AUTOCORRECT_ACTIVE_LANGUAGE'",
+            )
+        }
+    }

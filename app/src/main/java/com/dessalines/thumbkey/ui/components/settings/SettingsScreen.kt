@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.InstallMobile
 import androidx.compose.material.icons.outlined.KeyboardAlt
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -157,6 +158,16 @@ fun SettingsScreen(
                             )
                         },
                         onClick = { navController.navigate("behavior") },
+                    )
+                    Preference(
+                        title = { Text(stringResource(R.string.autocorrect)) },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Spellcheck,
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = { navController.navigate("autocorrectSettings") },
                     )
                     Preference(
                         title = { Text(stringResource(R.string.clipboard_history)) },
