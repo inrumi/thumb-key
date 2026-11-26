@@ -158,4 +158,6 @@ dependencies {
 
     // Handwriting recognition for sketch mode, fully offline
     implementation("io.github.toldry:glyphsketch:0.1.1")
+
+    testImplementation("junit:junit:4.13.2")
 }
