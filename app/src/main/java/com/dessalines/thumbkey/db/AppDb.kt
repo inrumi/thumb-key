@@ -86,6 +86,13 @@ const val DEFAULT_FLOATING_X_FRACTION = 0.5f
 const val DEFAULT_FLOATING_Y_FRACTION = 1.0f
 const val DEFAULT_KEY_ANIMATION_TYPE = 0
 const val DEFAULT_SWIPE_TRAIL_ENABLED = 0
+const val DEFAULT_HOLD_KEY_ACTION = 0
+const val DEFAULT_HOLD_DURATION_MS = 400
+const val MIN_HOLD_DURATION_MS = 50
+const val MAX_HOLD_DURATION_MS = 1000
+const val HOLD_DURATION_STEP_MS = 10
+const val DEFAULT_NUMERIC_LAYOUT_ORDER = 0
+const val DEFAULT_BACKSPACE_HOLD_ACTION = 0
 
 @Entity
 data class AppSettings(
@@ -393,6 +400,26 @@ data class AppSettings(
         defaultValue = DEFAULT_SWIPE_TRAIL_ENABLED.toString(),
     )
     val swipeTrailEnabled: Int = DEFAULT_SWIPE_TRAIL_ENABLED,
+    @ColumnInfo(
+        name = "hold_key_action",
+        defaultValue = DEFAULT_HOLD_KEY_ACTION.toString(),
+    )
+    val holdKeyAction: Int = DEFAULT_HOLD_KEY_ACTION,
+    @ColumnInfo(
+        name = "hold_duration_ms",
+        defaultValue = DEFAULT_HOLD_DURATION_MS.toString(),
+    )
+    val holdDurationMs: Int = DEFAULT_HOLD_DURATION_MS,
+    @ColumnInfo(
+        name = "numeric_layout_order",
+        defaultValue = DEFAULT_NUMERIC_LAYOUT_ORDER.toString(),
+    )
+    val numericLayoutOrder: Int = DEFAULT_NUMERIC_LAYOUT_ORDER,
+    @ColumnInfo(
+        name = "backspace_hold_action",
+        defaultValue = DEFAULT_BACKSPACE_HOLD_ACTION.toString(),
+    )
+    val backspaceHoldAction: Int = DEFAULT_BACKSPACE_HOLD_ACTION,
 )
 
 data class LayoutsUpdate(
@@ -565,6 +592,14 @@ data class BehaviorUpdate(
     val slideHoldEnabled: Int,
     @ColumnInfo(name = "switch_ime_mode")
     val switchImeMode: Int = DEFAULT_SWITCH_IME_MODE,
+    @ColumnInfo(name = "hold_key_action")
+    val holdKeyAction: Int = DEFAULT_HOLD_KEY_ACTION,
+    @ColumnInfo(name = "hold_duration_ms")
+    val holdDurationMs: Int = DEFAULT_HOLD_DURATION_MS,
+    @ColumnInfo(name = "numeric_layout_order")
+    val numericLayoutOrder: Int = DEFAULT_NUMERIC_LAYOUT_ORDER,
+    @ColumnInfo(name = "backspace_hold_action")
+    val backspaceHoldAction: Int = DEFAULT_BACKSPACE_HOLD_ACTION,
 )
 
 data class KeyModificationsUpdate(
@@ -710,7 +745,7 @@ class AppSettingsRepository(
 }
 
 @Database(
-    version = 31,
+    version = 32,
     entities = [AppSettings::class],
     exportSchema = true,
 )
@@ -763,6 +798,7 @@ abstract class AppDB : RoomDatabase() {
                             MIGRATION_28_29,
                             MIGRATION_29_30,
                             MIGRATION_30_31,
+                            MIGRATION_31_32,
                         )
                         // Necessary because it can't insert data on creation
                         .addCallback(

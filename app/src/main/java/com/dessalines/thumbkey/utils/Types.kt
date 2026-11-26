@@ -508,3 +508,27 @@ data class ReleasedKeyFeedback(
     val originDirection: SwipeDirection?,
     val id: Long,
 )
+
+enum class HoldKeyAction(
+    @param:StringRes val resId: Int,
+) {
+    None(R.string.hold_key_action_none),
+    Number(R.string.send_numeric),
+    OppositeCase(R.string.send_oppsite_case),
+}
+
+enum class NumericLayoutOrder(
+    @param:StringRes val resId: Int,
+) {
+    Default(R.string.numeric_layout_order_default),
+    Phone(R.string.numeric_layout_order_phone),
+    Calculator(R.string.numeric_layout_order_calculator),
+}
+
+enum class BackspaceHoldAction(
+    @param:StringRes val resId: Int,
+) {
+    DeleteWord(R.string.backspace_hold_action_delete_word),
+    RepeatDelete(R.string.backspace_hold_action_repeat_delete),
+    None(R.string.hold_key_action_none),
+}

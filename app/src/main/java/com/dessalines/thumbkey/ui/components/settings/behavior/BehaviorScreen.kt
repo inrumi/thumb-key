@@ -14,11 +14,14 @@ import androidx.compose.material.icons.automirrored.outlined.RotateRight
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.BorderInner
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.SpaceBar
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Swipe
 import androidx.compose.material.icons.outlined.SwipeRight
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.UTurnRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,12 +45,16 @@ import com.dessalines.thumbkey.R
 import com.dessalines.thumbkey.db.AppSettingsViewModel
 import com.dessalines.thumbkey.db.BehaviorUpdate
 import com.dessalines.thumbkey.db.DEFAULT_AUTO_CAPITALIZE
+import com.dessalines.thumbkey.db.DEFAULT_BACKSPACE_HOLD_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_CIRCULAR_DRAG_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_CLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_DRAG_RETURN_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_GHOST_KEYS_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_HOLD_DURATION_MS
+import com.dessalines.thumbkey.db.DEFAULT_HOLD_KEY_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_MIN_SWIPE_LENGTH
+import com.dessalines.thumbkey.db.DEFAULT_NUMERIC_LAYOUT_ORDER
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_BACKSPACE_DEADZONE_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_CURSOR_MOVEMENT_MODE
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_ENABLED
@@ -57,11 +64,17 @@ import com.dessalines.thumbkey.db.DEFAULT_SLIDE_SPACEBAR_DEADZONE_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SPACEBAR_MULTITAPS
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_IME_MODE
 import com.dessalines.thumbkey.db.DEFAULT_SWITCH_TO_LETTERS_AFTER_SPACE
+import com.dessalines.thumbkey.db.HOLD_DURATION_STEP_MS
+import com.dessalines.thumbkey.db.MAX_HOLD_DURATION_MS
+import com.dessalines.thumbkey.db.MIN_HOLD_DURATION_MS
 import com.dessalines.thumbkey.ui.components.common.TestOutTextField
 import com.dessalines.thumbkey.ui.components.settings.about.SettingsDivider
+import com.dessalines.thumbkey.utils.BackspaceHoldAction
 import com.dessalines.thumbkey.utils.CircularDragAction
 import com.dessalines.thumbkey.utils.CursorAccelerationMode
+import com.dessalines.thumbkey.utils.HoldKeyAction
 import com.dessalines.thumbkey.utils.ImeSwitchMode
+import com.dessalines.thumbkey.utils.NumericLayoutOrder
 import com.dessalines.thumbkey.utils.SimpleTopAppBar
 import com.dessalines.thumbkey.utils.TAG
 import com.dessalines.thumbkey.utils.toBool
@@ -71,6 +84,7 @@ import me.zhanghai.compose.preference.ListPreferenceType
 import me.zhanghai.compose.preference.ProvidePreferenceTheme
 import me.zhanghai.compose.preference.SliderPreference
 import me.zhanghai.compose.preference.SwitchPreference
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +121,21 @@ fun BehaviorScreen(
     var ghostKeysEnabledState = (settings?.ghostKeysEnabled ?: DEFAULT_GHOST_KEYS_ENABLED).toBool()
     var slideHoldEnabledState = (settings?.slideHoldEnabled ?: DEFAULT_SLIDE_HOLD_ENABLED).toBool()
     var switchImeModeState = ImeSwitchMode.entries[settings?.switchImeMode ?: DEFAULT_SWITCH_IME_MODE]
+    var holdKeyActionState =
+        HoldKeyAction.entries.getOrElse(settings?.holdKeyAction ?: DEFAULT_HOLD_KEY_ACTION) { HoldKeyAction.None }
+    var backspaceHoldActionState =
+        BackspaceHoldAction.entries.getOrElse(
+            settings?.backspaceHoldAction ?: DEFAULT_BACKSPACE_HOLD_ACTION,
+        ) { BackspaceHoldAction.DeleteWord }
+    var holdDurationMsState =
+        (settings?.holdDurationMs ?: DEFAULT_HOLD_DURATION_MS)
+            .coerceIn(MIN_HOLD_DURATION_MS, MAX_HOLD_DURATION_MS)
+            .toFloat()
+    var holdDurationMsSliderState by remember(holdDurationMsState) { mutableFloatStateOf(holdDurationMsState) }
+    var numericLayoutOrderState =
+        NumericLayoutOrder.entries.getOrElse(
+            settings?.numericLayoutOrder ?: DEFAULT_NUMERIC_LAYOUT_ORDER,
+        ) { NumericLayoutOrder.Default }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -134,6 +163,10 @@ fun BehaviorScreen(
                 ghostKeysEnabled = ghostKeysEnabledState.toInt(),
                 slideHoldEnabled = slideHoldEnabledState.toInt(),
                 switchImeMode = switchImeModeState.ordinal,
+                holdKeyAction = holdKeyActionState.ordinal,
+                holdDurationMs = holdDurationMsState.roundToInt(),
+                numericLayoutOrder = numericLayoutOrderState.ordinal,
+                backspaceHoldAction = backspaceHoldActionState.ordinal,
             ),
         )
     }
@@ -465,6 +498,63 @@ fun BehaviorScreen(
                     SettingsDivider()
                     ListPreference(
                         type = ListPreferenceType.DROPDOWN_MENU,
+                        value = holdKeyActionState,
+                        onValueChange = {
+                            holdKeyActionState = it
+                            updateBehavior()
+                        },
+                        values = HoldKeyAction.entries,
+                        valueToText = { AnnotatedString(resources.getString(it.resId)) },
+                        title = { Text(stringResource(R.string.hold_key_action)) },
+                        summary = { Text(stringResource(holdKeyActionState.resId)) },
+                        icon = { Icon(imageVector = Icons.Outlined.TouchApp, contentDescription = null) },
+                    )
+                    ListPreference(
+                        type = ListPreferenceType.DROPDOWN_MENU,
+                        value = backspaceHoldActionState,
+                        onValueChange = {
+                            backspaceHoldActionState = it
+                            updateBehavior()
+                        },
+                        values = BackspaceHoldAction.entries,
+                        valueToText = { AnnotatedString(resources.getString(it.resId)) },
+                        title = { Text(stringResource(R.string.backspace_hold_action)) },
+                        summary = { Text(stringResource(backspaceHoldActionState.resId)) },
+                        icon = { Icon(imageVector = Icons.AutoMirrored.Outlined.Backspace, contentDescription = null) },
+                    )
+                    SliderPreference(
+                        value = holdDurationMsState,
+                        sliderValue = holdDurationMsSliderState,
+                        onSliderValueChange = { holdDurationMsSliderState = snapHoldDurationMs(it) },
+                        onValueChange = {
+                            val snapped = snapHoldDurationMs(it)
+                            holdDurationMsState = snapped
+                            holdDurationMsSliderState = snapped
+                            updateBehavior()
+                        },
+                        valueRange = MIN_HOLD_DURATION_MS.toFloat()..MAX_HOLD_DURATION_MS.toFloat(),
+                        title = {
+                            Text(stringResource(R.string.hold_duration, holdDurationMsSliderState.roundToInt().toString()))
+                        },
+                        summary = { Text(stringResource(R.string.hold_duration_description)) },
+                        icon = { Icon(imageVector = Icons.Outlined.Timer, contentDescription = null) },
+                    )
+                    ListPreference(
+                        type = ListPreferenceType.DROPDOWN_MENU,
+                        value = numericLayoutOrderState,
+                        onValueChange = {
+                            numericLayoutOrderState = it
+                            updateBehavior()
+                        },
+                        values = NumericLayoutOrder.entries,
+                        valueToText = { AnnotatedString(resources.getString(it.resId)) },
+                        title = { Text(stringResource(R.string.numeric_layout_order)) },
+                        summary = { Text(stringResource(numericLayoutOrderState.resId)) },
+                        icon = { Icon(imageVector = Icons.Outlined.Dialpad, contentDescription = null) },
+                    )
+                    SettingsDivider()
+                    ListPreference(
+                        type = ListPreferenceType.DROPDOWN_MENU,
                         value = switchImeModeState,
                         onValueChange = {
                             switchImeModeState = it
@@ -494,3 +584,8 @@ fun BehaviorScreen(
         },
     )
 }
+
+private fun snapHoldDurationMs(rawValue: Float): Float =
+    ((rawValue / HOLD_DURATION_STEP_MS).roundToInt() * HOLD_DURATION_STEP_MS)
+        .coerceIn(MIN_HOLD_DURATION_MS, MAX_HOLD_DURATION_MS)
+        .toFloat()

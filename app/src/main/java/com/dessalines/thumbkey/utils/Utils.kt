@@ -21,6 +21,12 @@ import android.widget.Toast
 import androidx.activity.compose.LocalActivity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.NavigateBefore
+import androidx.compose.material.icons.automirrored.outlined.NavigateNext
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +39,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -1754,6 +1761,17 @@ private fun autoCapitalize(
 }
 
 fun autoCapitalizeCheck(ime: IMEService): Boolean = ime.currentInputConnection.getCursorCapsMode(ime.currentInputEditorInfo.inputType) > 0
+
+fun imeActionDisplayIcon(imeAction: Int): ImageVector? =
+    when (imeAction) {
+        EditorInfo.IME_ACTION_SEARCH -> Icons.Outlined.Search
+        EditorInfo.IME_ACTION_SEND -> Icons.AutoMirrored.Outlined.Send
+        EditorInfo.IME_ACTION_GO -> Icons.AutoMirrored.Outlined.ArrowForward
+        EditorInfo.IME_ACTION_NEXT -> Icons.AutoMirrored.Outlined.NavigateNext
+        EditorInfo.IME_ACTION_PREVIOUS -> Icons.AutoMirrored.Outlined.NavigateBefore
+        EditorInfo.IME_ACTION_DONE -> Icons.Outlined.Check
+        else -> null
+    }
 
 /**
  * Avoid capitalizing or switching to shifted mode in certain edit boxes

@@ -122,6 +122,7 @@ internal fun resolveFlipTargetX(
 private data class FloatingPin(
     val offset: Offset,
     val boxWidthPx: Int,
+    val boxHeightPx: Int,
     val panelWidthPx: Int,
 )
 
@@ -147,6 +148,8 @@ fun FloatingKeyboardFrame(
     vibrateOnTap: Boolean,
     onMoved: (Float, Float) -> Unit,
     onBounds: (IntRect) -> Unit,
+    modifier: Modifier = Modifier.fillMaxSize(),
+    applySafeDrawingPadding: Boolean = true,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable (keyWidth: Float, keyHeight: Float) -> Unit,
 ) {
@@ -184,9 +187,8 @@ fun FloatingKeyboardFrame(
 
     BoxWithConstraints(
         modifier =
-            Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
+            modifier
+                .then(if (applySafeDrawingPadding) Modifier.safeDrawingPadding() else Modifier)
                 .onGloballyPositioned { coords ->
                     val pos = coords.positionInWindow()
                     gesture.frameOriginInWindow = IntOffset(pos.x.roundToInt(), pos.y.roundToInt())
@@ -210,7 +212,7 @@ fun FloatingKeyboardFrame(
 
         fun pinned(): Offset? =
             dragPin.value
-                ?.takeIf { it.boxWidthPx == boxWidthPx && it.panelWidthPx == panelWidthPx }
+                ?.takeIf { it.boxWidthPx == boxWidthPx && it.boxHeightPx == boxHeightPx && it.panelWidthPx == panelWidthPx }
                 ?.offset
 
         fun pin(offset: Offset) {
@@ -218,6 +220,7 @@ fun FloatingKeyboardFrame(
                 FloatingPin(
                     offset = offset,
                     boxWidthPx = boxWidthPx,
+                    boxHeightPx = boxHeightPx,
                     panelWidthPx = panelWidthPx,
                 )
         }
