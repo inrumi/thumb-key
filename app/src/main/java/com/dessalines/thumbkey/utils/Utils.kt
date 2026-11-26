@@ -356,7 +356,6 @@ fun performKeyAction(
     when (action) {
         is KeyAction.CommitText -> {
             val text = action.text
-            Log.d(TAG, "committing key text: $text")
             ime.ignoreNextCursorMove()
 
             keyboardSettings.textProcessor?.handleCommitText(ime, text)
@@ -379,7 +378,6 @@ fun performKeyAction(
 
         is KeyAction.SendEvent -> {
             val ev = action.event
-            Log.d(TAG, "sending key event: $ev")
             keyboardSettings.textProcessor?.handleKeyEvent(ime, ev)
                 ?: ime.currentInputConnection.sendKeyEvent(ev)
             onKeyEvent(action)
