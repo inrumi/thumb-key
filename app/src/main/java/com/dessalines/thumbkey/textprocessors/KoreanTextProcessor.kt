@@ -482,7 +482,6 @@ class KoreanTextProcessor : TextProcessor {
     }
 
     private fun commitCurrentBlock(ic: InputConnection) {
-        Log.d(TAG, "TextProcessor: committing text: $composedText")
         ic.commitText(composedText, 1)
         resetState()
         selectionStart += 1
